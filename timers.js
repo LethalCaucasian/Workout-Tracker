@@ -98,9 +98,15 @@
   }
 
   function updateRestDisplays(value){
+    const text=fmt(value);
     document.querySelectorAll('.mini-rest-display').forEach(el=>{
-      el.textContent=fmt(value);
-      el.classList.toggle('running',restRunning);
+      // Only touch the DOM when the value actually changes. The page uses a
+      // MutationObserver to add timer controls, so repeatedly assigning the
+      // same text here can otherwise trigger an endless observer loop.
+      if(el.textContent !== text) el.textContent=text;
+      if(el.classList.contains('running') !== restRunning){
+        el.classList.toggle('running',restRunning);
+      }
     });
   }
 
@@ -149,8 +155,8 @@
     if(!content) return;
 
     const exercises=[...content.querySelectorAll('.exercise')];
-    exercises.forEach((card,index)=>{
-      let next=card.nextElementSibling;
+    exercises.forEach(card=>{
+      const next=card.nextElementSibling;
       if(next && next.classList.contains('mini-rest-bar')) return;
 
       const bar=document.createElement('div');
@@ -166,8 +172,6 @@
       card.insertAdjacentElement('afterend',bar);
     });
 
-    // Remove the original large rest-timer card now that the compact controls
-    // are available between every exercise.
     const bigTimer=document.getElementById('timer');
     const bigCard=bigTimer?.closest('.card');
     const bottomGrid=bigCard?.parentElement;
@@ -215,7 +219,8 @@
     const tick=()=>{
       const left=Math.max(0,Math.ceil((endAt-Date.now())/1000));
       const el=document.getElementById(displayId);
-      if(el) el.textContent=fmt(left);
+      const text=fmt(left);
+      if(el && el.textContent !== text) el.textContent=text;
       if(left<=0){
         if(activeSetTimer) clearInterval(activeSetTimer.interval);
         if(el){
