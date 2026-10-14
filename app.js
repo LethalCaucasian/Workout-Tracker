@@ -64,6 +64,49 @@ const PLAN = [
   ]}
 ];
 
+const WARMUPS = {
+  1: [
+    ["Arm circles","easy","reps"],
+    ["Shoulder rolls","easy","reps"],
+    ["Band pull-aparts","easy","reps"],
+    ["Easy push-ups","5–8 reps","reps"]
+  ],
+  2: [
+    ["Shoulder rolls","easy","reps"],
+    ["Band pull-aparts","easy","reps"],
+    ["Arm swings","easy","reps"],
+    ["Light band rows","8–10 reps","reps"]
+  ],
+  3: [
+    ["Bodyweight squats","10 reps","reps"],
+    ["Alternating knee raises","10 each side","reps"],
+    ["Hip circles","easy","reps"],
+    ["Easy calf raises","10–15 reps","reps"]
+  ],
+  4: [
+    ["Arm circles","easy","reps"],
+    ["Shoulder rolls","easy","reps"],
+    ["Band pull-aparts","easy","reps"],
+    ["Easy push-ups","5–8 reps","reps"]
+  ],
+  5: [
+    ["Shoulder rolls","easy","reps"],
+    ["Band pull-aparts","easy","reps"],
+    ["Arm swings","easy","reps"],
+    ["Easy band rows","8–10 reps","reps"]
+  ],
+  6: [
+    ["Bodyweight squats","10 reps","reps"],
+    ["Hip hinges","10 reps","reps"],
+    ["Alternating knee raises","10 each side","reps"],
+    ["Easy reverse lunges","5 each side","reps"]
+  ],
+  7: [
+    ["Easy movement","time as needed","sec"],
+    ["Relaxed breathing","time as needed","sec"]
+  ]
+};
+
 const STORAGE_KEY="chatgpt_workout_tracker_v1";
 let state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"selectedDay":1,"drafts":{},"history":[]}');
 let timerLeft=60, timerId=null;
@@ -72,12 +115,16 @@ function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1700)}
 function fmtDate(d=new Date()){return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})}
 function selectedPlan(){return PLAN.find(p=>p.day===state.selectedDay)}
+function warmupsForDay(day){return WARMUPS[day] || []}
 function draftKey(){return "d"+state.selectedDay}
 function getDraft(){
-  const p=selectedPlan(), key=draftKey();
+  const p=selectedPlan(), key=draftKey(), warmups=warmupsForDay(p.day);
   if(!state.drafts[key]){
-    state.drafts[key]={date:new Date().toISOString().slice(0,10),notes:"",warmup:false,sets:p.exercises.map(ex=>Array.from({length:3},()=>({weight:"",value:"",done:false})))};
+    state.drafts[key]={date:new Date().toISOString().slice(0,10),notes:"",warmup:false,warmupEntries:warmups.map(()=>({weight:"",value:"",done:false})),sets:p.exercises.map(ex=>Array.from({length:3},()=>({weight:"",value:"",done:false})))};
   }
+  if(!Array.isArray(state.drafts[key].warmupEntries)) state.drafts[key].warmupEntries=warmups.map(()=>({weight:"",value:"",done:false}));
+  while(state.drafts[key].warmupEntries.length<warmups.length) state.drafts[key].warmupEntries.push({weight:"",value:"",done:false});
+  if(state.drafts[key].warmupEntries.length>warmups.length) state.drafts[key].warmupEntries=state.drafts[key].warmupEntries.slice(0,warmups.length);
   while(state.drafts[key].sets.length<p.exercises.length) state.drafts[key].sets.push(Array.from({length:3},()=>({weight:"",value:"",done:false})));
   return state.drafts[key];
 }
@@ -105,7 +152,7 @@ function totals(){
 
 function renderToday(){
   renderDays();
-  const p=selectedPlan(), d=getDraft(), t=totals();
+  const p=selectedPlan(), d=getDraft(), t=totals(), warmups=warmupsForDay(p.day);
   const html=[];
   html.push(`<div class="hero" style="border-color:${p.color}">
     <h1>DAY ${p.day} — ${p.name}</h1>
@@ -117,8 +164,19 @@ function renderToday(){
       <div class="stat"><b>${Math.round(t.volume).toLocaleString()} lb</b><span>Volume</span></div>
     </div>
   </div>`);
-  html.push(`<div class="warmup"><b>🔥 Warm-up</b><div>${p.warm}</div>
-    <div class="setactions"><button class="mini" onclick="toggleWarmup()">${d.warmup?'✓ Warm-up done':'Mark warm-up done'}</button></div></div>`);
+  html.push(`<div class="warmup"><b>🔥 Warm-up</b><div>${p.warm}</div><div class="spacer"></div>`);
+  warmups.forEach((w,i)=>{
+    const entry=d.warmupEntries[i], type=w[2];
+    html.push(`<div class="history-ex"><b>${w[0]}</b><div class="muted">${w[1]}</div>
+      <div class="setrow">
+        <div class="setlabel">Warm</div>
+        <div class="field"><input inputmode="decimal" placeholder="weight" value="${entry.weight}" oninput="updateWarmup(${i},'weight',this.value)"><span>lb</span></div>
+        <div class="field"><input inputmode="numeric" placeholder="${type==='sec'?'seconds':'reps'}" value="${entry.value}" oninput="updateWarmup(${i},'value',this.value)"><span>${type==='sec'?'sec':'reps'}</span></div>
+        <button class="done ${entry.done?'on':''}" onclick="toggleWarmupEntry(${i})">${entry.done?'✓':'○'}</button>
+      </div>
+    </div>`);
+  });
+  html.push(`<div class="setactions"><button class="mini" onclick="toggleWarmup()">${d.warmup?'✓ Warm-up done':'Mark warm-up done'}</button></div></div>`);
   p.exercises.forEach((ex,i)=>{
     const type=ex[3];
     html.push(`<div class="exercise" style="--dayColor:${p.color}">
@@ -146,6 +204,8 @@ function renderToday(){
   save();
 }
 window.toggleWarmup=()=>{getDraft().warmup=!getDraft().warmup;save();renderToday()}
+window.updateWarmup=(i,k,v)=>{getDraft().warmupEntries[i][k]=v;save()}
+window.toggleWarmupEntry=(i)=>{getDraft().warmupEntries[i].done=!getDraft().warmupEntries[i].done;save();renderToday()}
 window.updateSet=(i,j,k,v)=>{getDraft().sets[i][j][k]=v;save();updateSummaryOnly()}
 window.toggleSet=(i,j)=>{getDraft().sets[i][j].done=!getDraft().sets[i][j].done;save();renderToday()}
 window.addSet=(i)=>{getDraft().sets[i].push({weight:"",value:"",done:false});save();renderToday()}
@@ -162,8 +222,9 @@ window.copyPrevious=(i)=>{
 }
 window.resetDay=()=>{if(confirm("Clear this day's current entries?")){delete state.drafts[draftKey()];save();renderToday()}}
 window.saveWorkout=()=>{
-  const p=selectedPlan(), d=getDraft(), t=totals();
+  const p=selectedPlan(), d=getDraft(), t=totals(), warmups=warmupsForDay(p.day);
   const entry={id:Date.now(),date:d.date,day:p.day,name:p.name,warmup:d.warmup,notes:d.notes||"",volume:t.volume,reps:t.reps,
+    warmupEntries:warmups.map((w,i)=>({name:w[0],target:w[1],type:w[2],weight:parseFloat(d.warmupEntries[i].weight)||0,value:parseFloat(d.warmupEntries[i].value)||0,done:!!d.warmupEntries[i].done})),
     exercises:p.exercises.map((ex,i)=>({name:ex[0],target:ex[1],type:ex[3],sets:d.sets[i].map(s=>({weight:parseFloat(s.weight)||0,value:parseFloat(s.value)||0,done:!!s.done}))}))};
   state.history.push(entry); save(); renderHistory(); renderProgress(); toast("Workout saved");
 }
@@ -172,9 +233,24 @@ window.setTimer=(n)=>{clearInterval(timerId);timerId=null;timerLeft=n;renderToda
 window.resetTimer=()=>{clearInterval(timerId);timerId=null;timerLeft=60;renderToday()}
 window.startTimer=()=>{if(timerId)return;timerId=setInterval(()=>{timerLeft--;const el=document.getElementById('timer');if(el)el.textContent=formatTimer(timerLeft);if(timerLeft<=0){clearInterval(timerId);timerId=null;timerLeft=0;toast("Rest complete")}},1000)}
 
+function formatWarmupEntry(e){
+  const pieces=[];
+  if(e.weight) pieces.push(`${e.weight} lb`);
+  if(e.value) pieces.push(`${e.value} ${e.type==="sec"?"sec":"reps"}`);
+  if(!pieces.length) pieces.push("not logged");
+  if(e.done) pieces.push("✓");
+  return pieces.join(" • ");
+}
+
 function summaryText(h){
   if(!h) return "No saved workouts yet.";
   const lines=[`${h.date} — Day ${h.day}: ${h.name}`];
+  if(h.warmupEntries?.length){
+    lines.push("Warm-up:");
+    h.warmupEntries.forEach(e=>lines.push(`- ${e.name}: ${formatWarmupEntry(e)}`));
+  } else if(h.warmup){
+    lines.push("Warm-up: complete");
+  }
   h.exercises.forEach(e=>{
     const sets=e.sets.map(s=>e.type==="sec" ? `${s.weight?`${s.weight} lb × `:""}${s.value}s${s.done?" ✓":""}` : `${s.weight?`${s.weight} lb × `:""}${s.value} reps${s.done?" ✓":""}`).join(" | ");
     lines.push(`${e.name}: ${sets}`);
@@ -186,8 +262,9 @@ function summaryText(h){
 }
 async function copyText(text){try{await navigator.clipboard.writeText(text);toast("Copied")}catch{prompt("Copy this:",text)}}
 window.copyCurrent=()=>{
-  const p=selectedPlan(),d=getDraft(),t=totals();
-  const h={date:d.date,day:p.day,name:p.name,notes:d.notes,reps:t.reps,volume:t.volume,
+  const p=selectedPlan(),d=getDraft(),t=totals(),warmups=warmupsForDay(p.day);
+  const h={date:d.date,day:p.day,name:p.name,warmup:d.warmup,notes:d.notes,reps:t.reps,volume:t.volume,
+    warmupEntries:warmups.map((w,i)=>({name:w[0],type:w[2],weight:parseFloat(d.warmupEntries[i].weight)||0,value:parseFloat(d.warmupEntries[i].value)||0,done:d.warmupEntries[i].done})),
     exercises:p.exercises.map((ex,i)=>({name:ex[0],type:ex[3],sets:d.sets[i].map(s=>({weight:parseFloat(s.weight)||0,value:parseFloat(s.value)||0,done:s.done}))}))};
   copyText(summaryText(h));
 }
@@ -198,6 +275,7 @@ function renderHistory(){
   el.innerHTML=[...state.history].reverse().map(h=>`<div class="history-item">
     <h3>${h.date} — Day ${h.day}: ${h.name}</h3>
     <div class="muted">${h.reps} reps • ${Math.round(h.volume).toLocaleString()} lb volume</div>
+    ${h.warmupEntries?.length?`<div class="history-ex"><b>Warm-up</b><div class="muted">${h.warmupEntries.map(e=>`${e.name}: ${formatWarmupEntry(e)}`).join("<br>")}</div></div>`:(h.warmup?'<div class="history-ex"><b>Warm-up</b><div class="muted">Complete</div></div>':'')}
     ${h.exercises.map(e=>`<div class="history-ex"><b>${e.name}</b><div class="muted">${e.sets.map(s=>e.type==="sec"?`${s.value}s${s.weight?` @ ${s.weight} lb`:""}`:`${s.weight||"BW"} × ${s.value}`).join(" • ")}</div></div>`).join('')}
     ${h.notes?`<div class="history-ex"><b>Notes:</b> ${h.notes}</div>`:''}
     <div class="toolbar"><button class="mini" onclick="copyHistory(${h.id})">Copy</button><button class="mini" onclick="deleteHistory(${h.id})">Delete</button></div>
