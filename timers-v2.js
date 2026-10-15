@@ -34,45 +34,48 @@
     if(active?.interval) clearInterval(active.interval);
     if(active?.displayId){
       const el=document.getElementById(active.displayId);
-      if(el && reset){el.textContent='Ready';el.classList.remove('running','done');}
+      if(el&&reset){el.textContent='Ready';el.classList.remove('running','done');}
     }
     active=null;
   }
   window.stopTimedSet=()=>stop(true);
   window.startTimedSet=(i,j)=>{
     const plan=selectedPlan(),draft=getDraft(),ex=plan?.exercises?.[i],set=draft?.sets?.[i]?.[j],mode=modeFor(ex,set),seconds=secondsFor(set,mode);
-    if(!['sec','min'].includes(mode)){if(typeof toast==='function') toast('This set is using reps');return;}
-    if(seconds<=0){if(typeof toast==='function') toast(`Enter the set time in ${mode==='min'?'minutes':'seconds'} first`);return;}
+    if(!['sec','min'].includes(mode)){if(typeof toast==='function')toast('This set is using reps');return;}
+    if(seconds<=0){if(typeof toast==='function')toast(`Enter the set time in ${mode==='min'?'minutes':'seconds'} first`);return;}
     stop(true);
     const displayId=`set-countdown-${i}-${j}`,el=document.getElementById(displayId),endAt=Date.now()+seconds*1000;
     if(el){el.textContent=fmt(seconds);el.classList.add('running');el.classList.remove('done');}
     const tick=()=>{
+      if(!active||active.displayId!==displayId)return;
       const left=Math.max(0,Math.ceil((endAt-Date.now())/1000)),node=document.getElementById(displayId);
-      if(node) node.textContent=fmt(left);
+      if(node)node.textContent=fmt(left);
       if(left<=0){
-        if(active?.interval) clearInterval(active.interval);
+        if(active?.interval)clearInterval(active.interval);
         if(node){node.textContent='DONE';node.classList.remove('running');node.classList.add('done');}
-        active=null;alarm();if(typeof toast==='function') toast('Timed set complete');
+        active=null;alarm();if(typeof toast==='function')toast('Timed set complete');
       }
     };
-    active={interval:setInterval(tick,250),displayId};tick();
+    active={interval:null,displayId,endAt,tick};
+    active.interval=setInterval(tick,250);tick();
   };
 
   function enhance(){
     const plan=typeof selectedPlan==='function'?selectedPlan():null,draft=typeof getDraft==='function'?getDraft():null;
-    if(!plan||!draft) return;
+    if(!plan||!draft)return;
     document.querySelectorAll('#todayContent .exercise').forEach((card,i)=>{
-      const ex=plan.exercises[i]; if(!ex) return;
+      const ex=plan.exercises[i];if(!ex)return;
       card.querySelectorAll('.settable .setrow').forEach((row,j)=>{
         const mode=modeFor(ex,draft.sets?.[i]?.[j]);
-        if(!['sec','min'].includes(mode)) return;
-        const next=row.nextElementSibling;
-        if(next?.classList.contains('timed-set-controls')) return;
+        if(!['sec','min'].includes(mode))return;
+        const next=row.nextElementSibling;if(next?.classList.contains('timed-set-controls'))return;
         const wrap=document.createElement('div');wrap.className='timed-set-controls';wrap.innerHTML=`<button class="mini" type="button" onclick="startTimedSet(${i},${j})">▶ Start timed set</button><button class="mini" type="button" onclick="stopTimedSet()">Stop</button><span class="set-countdown" id="set-countdown-${i}-${j}">Ready</span>`;row.insertAdjacentElement('afterend',wrap);
       });
     });
   }
   let applying=false;
   new MutationObserver(()=>{if(applying)return;applying=true;try{enhance();}finally{applying=false;}}).observe(document.body,{childList:true,subtree:true});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&active?.tick)active.tick();});
+  window.addEventListener('pageshow',()=>{if(active?.tick)active.tick();});
   enhance();
 })();
