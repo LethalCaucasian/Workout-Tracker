@@ -16,6 +16,9 @@
     .editor-head h2{margin:0;font-size:21px}
     .editor-head p{margin:4px 0 0;color:#99a8bc;font-size:12px}
     .editor-close{border:1px solid #36506f;background:#101d30;color:white;border-radius:9px;width:38px;height:38px;font-size:20px}
+    .editor-day-name{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;padding:10px;border:1px solid #243651;background:#0a1422;border-radius:12px}
+    .editor-day-name label{font-size:11px;color:#99a8bc;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+    .editor-day-name small{color:#7f90a8;font-size:11px;line-height:1.35}
     .editor-list{display:flex;flex-direction:column;gap:10px}
     .editor-item{border:1px solid #243651;background:#0a1422;border-radius:12px;padding:10px}
     .editor-item-top{display:grid;grid-template-columns:36px 1fr 130px;gap:8px;align-items:center}
@@ -47,18 +50,39 @@
     return exercises.map(ex=>[ex[0],ex[1],ex[2],ex[3]]);
   }
 
-  // Override the app's selectedPlan() so custom exercises are used everywhere:
+  function esc(value){
+    return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');
+  }
+
+  // Override the app's selectedPlan() so custom day names and exercises are used everywhere:
   // Today view, save history, progress calculations, and timed-set controls.
   selectedPlan = function(){
     const base = defaultPlanForDay(state.selectedDay);
     if(!base) return null;
     const custom = state.customPlans?.[state.selectedDay];
-    if(!custom?.exercises?.length) return base;
-    return {...base, exercises: cloneExercises(custom.exercises)};
+    if(!custom) return base;
+    return {
+      ...base,
+      name: String(custom.name||'').trim() || base.name,
+      exercises: custom.exercises?.length ? cloneExercises(custom.exercises) : cloneExercises(base.exercises)
+    };
+  };
+
+  // The original app builds the day buttons directly from PLAN, so make those labels
+  // profile-aware too when a custom day name has been saved.
+  renderDays = function(){
+    const el=document.getElementById('days');
+    if(!el) return;
+    el.innerHTML=PLAN.map(p=>{
+      const custom=state.customPlans?.[p.day];
+      const name=String(custom?.name||'').trim() || p.name;
+      return `<button class="day ${p.day===state.selectedDay?'active':''}" style="--dayColor:${p.color}" onclick="selectDay(${p.day})"><strong>DAY ${p.day}</strong><small>${esc(name)}</small></button>`;
+    }).join('');
   };
 
   let modal = null;
   let working = [];
+  let workingName = '';
   let editingDay = null;
   let originalExercises = [];
 
@@ -67,10 +91,15 @@
     modal = document.createElement('div');
     modal.className = 'editor-backdrop';
     modal.innerHTML = `
-      <div class="editor-modal" role="dialog" aria-modal="true" aria-label="Edit workout exercises">
+      <div class="editor-modal" role="dialog" aria-modal="true" aria-label="Edit workout">
         <div class="editor-head">
-          <div><h2 id="editorTitle">Edit Exercises</h2><p>Change, replace, add, remove, or reorder exercises for this day.</p></div>
+          <div><h2 id="editorTitle">Edit Workout</h2><p>Change the day title, replace exercises, add, remove, or reorder them.</p></div>
           <button class="editor-close" type="button" id="editorClose">×</button>
+        </div>
+        <div class="editor-day-name">
+          <label for="editorDayName">Day title</label>
+          <input class="editor-input" id="editorDayName" maxlength="80" placeholder="Workout day name">
+          <small id="editorDayNameHelp">This is the text shown after DAY — in the workout heading.</small>
         </div>
         <div id="editorList" class="editor-list"></div>
         <p class="editor-help">Changing an exercise name treats it as a new exercise and starts that exercise with blank current sets. Saved workout history is never rewritten.</p>
@@ -89,6 +118,7 @@
 
     modal.querySelector('#editorClose').onclick = closeEditor;
     modal.querySelector('#editorCancel').onclick = closeEditor;
+    modal.querySelector('#editorDayName').addEventListener('input',e=>{workingName=e.target.value;});
     modal.querySelector('#editorAdd').onclick = () => {
       working.push(['New exercise','3×8–12','','reps']);
       renderEditorList();
@@ -109,7 +139,10 @@
     const current = selectedPlan();
     originalExercises = cloneExercises(current.exercises);
     working = cloneExercises(current.exercises);
-    modal.querySelector('#editorTitle').textContent = `Edit Day ${editingDay} Exercises`;
+    workingName = current.name || '';
+    modal.querySelector('#editorTitle').textContent = `Edit Day ${editingDay} Workout`;
+    modal.querySelector('#editorDayName').value = workingName;
+    modal.querySelector('#editorDayNameHelp').textContent = `This is the text shown after DAY ${editingDay} — in the workout heading.`;
     renderEditorList();
     modal.classList.add('open');
     document.body.style.overflow='hidden';
@@ -119,10 +152,6 @@
     if(!modal) return;
     modal.classList.remove('open');
     document.body.style.overflow='';
-  }
-
-  function esc(value){
-    return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   function renderEditorList(){
@@ -213,8 +242,13 @@
       return;
     }
 
+    const base=defaultPlanForDay(editingDay);
+    const dayName=String(workingName||'').trim() || base?.name || `Day ${editingDay}`;
     remapDraftSets(editingDay,originalExercises,working);
-    state.customPlans[editingDay]={exercises:cloneExercises(working)};
+    state.customPlans[editingDay]={
+      name:dayName,
+      exercises:cloneExercises(working)
+    };
     save();
     closeEditor();
     renderToday();
@@ -224,7 +258,7 @@
   function resetDayToDefault(){
     const base=defaultPlanForDay(editingDay);
     if(!base) return;
-    if(!confirm(`Restore Day ${editingDay} to the original exercise list? Saved history will stay unchanged.`)) return;
+    if(!confirm(`Restore Day ${editingDay} to its original title and exercise list? Saved history will stay unchanged.`)) return;
     remapDraftSets(editingDay,originalExercises,base.exercises);
     delete state.customPlans[editingDay];
     save();
@@ -238,8 +272,8 @@
     if(!hero || hero.querySelector('.edit-day-row')) return;
     const row=document.createElement('div');
     row.className='edit-day-row';
-    const custom=!!state.customPlans?.[state.selectedDay]?.exercises?.length;
-    row.innerHTML=`<button class="btn edit-day-btn" type="button">✏️ Edit Exercises${custom?'<span class="custom-badge">CUSTOM</span>':''}</button>`;
+    const custom=!!state.customPlans?.[state.selectedDay];
+    row.innerHTML=`<button class="btn edit-day-btn" type="button">✏️ Edit Workout${custom?'<span class="custom-badge">CUSTOM</span>':''}</button>`;
     row.querySelector('button').onclick=openEditor;
     hero.appendChild(row);
   }
