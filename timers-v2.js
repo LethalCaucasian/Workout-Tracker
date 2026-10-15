@@ -16,6 +16,7 @@
     return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
   }
   function alarm(){
+    if(window.WorkoutTimerAudio?.play){WorkoutTimerAudio.play();return;}
     try{
       const Ctx=window.AudioContext||window.webkitAudioContext;
       if(!Ctx) return;
