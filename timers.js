@@ -49,6 +49,7 @@
   document.head.appendChild(style);
 
   function initAudio(){
+    if(window.WorkoutTimerAudio) return;
     if(!audioCtx){
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if(Ctx) audioCtx = new Ctx();
@@ -57,6 +58,7 @@
   }
 
   function playAlarm(){
+    if(window.WorkoutTimerAudio?.play){WorkoutTimerAudio.play();return;}
     initAudio();
     if(audioCtx){
       const now = audioCtx.currentTime;
@@ -100,9 +102,6 @@
   function updateRestDisplays(value){
     const text=fmt(value);
     document.querySelectorAll('.mini-rest-display').forEach(el=>{
-      // Only touch the DOM when the value actually changes. The page uses a
-      // MutationObserver to add timer controls, so repeatedly assigning the
-      // same text here can otherwise trigger an endless observer loop.
       if(el.textContent !== text) el.textContent=text;
       if(el.classList.contains('running') !== restRunning){
         el.classList.toggle('running',restRunning);
