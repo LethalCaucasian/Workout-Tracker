@@ -25,19 +25,19 @@
   </section>
 
   <section id="history" class="section">
-    <div class="hero"><h1>Workout History</h1><div class="sub">Saved workouts stay on this device/browser unless you export or sync them.</div></div>
+    <div class="hero"><h1>Workout History</h1><div class="sub">History is kept separately for the selected profile and can be backed up with GitHub sync.</div></div>
     <div id="historyList"></div>
   </section>
 
   <section id="progress" class="section">
-    <div class="hero"><h1>Progress</h1><div class="sub">Best weight, reps, and total volume from saved workouts.</div></div>
+    <div class="hero"><h1>Progress</h1><div class="sub">Best weight, reps, and total volume for the selected profile.</div></div>
     <div id="progressGrid" class="prgrid"></div>
   </section>
 
   <section id="settings" class="section">
     <div class="hero">
       <h1>Data & ChatGPT</h1>
-      <div class="sub">This standalone app cannot automatically write back into this chat.</div>
+      <div class="sub">Profiles stay separate while sharing the same workout tracker app.</div>
     </div>
     <div class="settings-grid">
       <div class="card">
@@ -47,7 +47,7 @@
           <label class="btn" for="importFile">Import JSON</label>
           <input id="importFile" type="file" accept="application/json" style="display:none">
         </div>
-        <p class="install-note">Export creates a backup file with your saved workouts. Importing restores it on another phone or computer.</p>
+        <p class="install-note">Export creates one backup containing every profile. Import restores a multi-profile backup or an older single-profile backup.</p>
       </div>
       <div class="card">
         <h3>Send a workout to ChatGPT</h3>
@@ -55,7 +55,7 @@
           <button class="btn primary" id="copyBtn">Copy Latest Summary</button>
           <button class="btn" id="shareBtn">Share Latest</button>
         </div>
-        <p class="install-note">Copy Latest Summary gives you clean text you can paste into ChatGPT. On phones, Share Latest opens the normal share sheet when supported.</p>
+        <p class="install-note">Copy Latest Summary uses the currently selected profile. On phones, Share Latest opens the normal share sheet when supported.</p>
       </div>
     </div>
     <div class="card" style="margin-top:10px">
@@ -70,6 +70,7 @@
 <script src="warmup-fields.js"></script>
 <script src="timers.js"></script>
 <script src="cooldown.js"></script>
+<script src="profiles.js"></script>
 <script src="github-sync.js"></script>
 </body>
 </html>
