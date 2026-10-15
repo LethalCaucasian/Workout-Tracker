@@ -13,18 +13,32 @@
     const d=baseGetDraft();
     const p=selectedPlan();
     if(!d.defaultSetInit || typeof d.defaultSetInit!=='object') d.defaultSetInit={};
+
     (p?.exercises||[]).forEach((ex,i)=>{
       const desired=Math.max(1,Math.min(30,parseInt(ex?.[5]?.sets,10)||0));
       if(!desired) return;
+
       const key=String(ex?.[4]||`${i}-${ex?.[0]||'exercise'}`);
-      if(d.defaultSetInit[key]) return;
       const rows=Array.isArray(d.sets?.[i])?d.sets[i]:[];
       const untouched=rows.every(s=>!String(s?.weight||'').trim() && !String(s?.value||'').trim() && !s?.done);
-      if(untouched){
+      const marker=d.defaultSetInit[key];
+
+      // Older builds stored only `true`. Treat the current untouched row count
+      // as the old default so a newly selected default can be detected.
+      const previousDefault=marker===true
+        ? rows.length
+        : (Number.isFinite(Number(marker)) && Number(marker)>0 ? Number(marker) : null);
+
+      const defaultChanged=previousDefault===null || previousDefault!==desired;
+      if(defaultChanged && untouched){
         const mode=ex?.[3]==='mixed'?'reps':(['reps','sec','min'].includes(ex?.[3])?ex[3]:'reps');
         d.sets[i]=Array.from({length:desired},()=>({weight:'',value:'',done:false,mode}));
       }
-      d.defaultSetInit[key]=true;
+
+      // Store the actual default count from now on. This lets later edits to
+      // Default Sets apply once, while still preserving manual add/remove-set
+      // changes after the default has already been applied.
+      d.defaultSetInit[key]=desired;
     });
     return d;
   };
@@ -45,7 +59,10 @@
       const rounds=parseInt(meta.rounds,10)||0;
       const label=document.createElement('div');
       label.className='circuit-group-label';
-      label.innerHTML=`<b>${group}${rounds?` · ${rounds}x`:''}</b><span>${rounds>1?'Complete one set of each exercise, then rest 60–90 sec before the next round.':''}</span>`;
+      const guidance=group.toLowerCase()==='jump rope'
+        ? 'Complete each work/recovery interval for the rounds shown.'
+        : (rounds>1?'Complete one set of each exercise, then rest 60–90 sec before the next round.':'');
+      label.innerHTML=`<b>${group}${rounds?` · ${rounds}x`:''}</b><span>${guidance}</span>`;
       card.insertAdjacentElement('beforebegin',label);
     });
   }
@@ -53,18 +70,5 @@
   const baseRenderToday=renderToday;
   renderToday=function(){baseRenderToday();addGroupLabels();};
 
-  function addFortySecondRest(){
-    document.querySelectorAll('.mini-rest-bar').forEach(bar=>{
-      if(bar.querySelector('[data-rest40]')) return;
-      const buttons=[...bar.querySelectorAll('button.mini')];
-      const fortyFive=buttons.find(b=>b.textContent.trim()==='45');
-      if(!fortyFive) return;
-      const btn=document.createElement('button');
-      btn.className='mini';btn.type='button';btn.dataset.rest40='1';btn.textContent='40';btn.onclick=()=>window.startMiniRest?.(40);
-      fortyFive.insertAdjacentElement('beforebegin',btn);
-    });
-  }
-  let applying=false;
-  new MutationObserver(()=>{if(applying)return;applying=true;try{addFortySecondRest();}finally{applying=false;}}).observe(document.body,{childList:true,subtree:true});
-  addFortySecondRest();addGroupLabels();
+  addGroupLabels();
 })();
