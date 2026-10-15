@@ -1,13 +1,6 @@
 (() => {
   if(typeof getDraft!=='function' || typeof selectedPlan!=='function') return;
 
-  const style=document.createElement('style');
-  style.textContent=`
-    .circuit-group-label{margin:12px 0 7px;padding:9px 11px;border:1px solid #2a405f;border-radius:10px;background:#0b1625}
-    .circuit-group-label b{display:block;font-size:13px}.circuit-group-label span{display:block;margin-top:2px;color:#91a2b8;font-size:11px}
-  `;
-  document.head.appendChild(style);
-
   const baseGetDraft=getDraft;
   getDraft=function(){
     const d=baseGetDraft();
@@ -42,33 +35,4 @@
     });
     return d;
   };
-
-  function addGroupLabels(){
-    const root=document.getElementById('todayContent');
-    const p=typeof selectedPlan==='function'?selectedPlan():null;
-    if(!root||!p||p.rest) return;
-    root.querySelectorAll('.circuit-group-label').forEach(el=>el.remove());
-    const cards=[...root.querySelectorAll('.exercise')];
-    let previous='';
-    cards.forEach((card,i)=>{
-      const meta=p.exercises?.[i]?.[5]||{};
-      const group=String(meta.group||'').trim();
-      if(!group){previous='';return;}
-      if(group===previous) return;
-      previous=group;
-      const rounds=parseInt(meta.rounds,10)||0;
-      const label=document.createElement('div');
-      label.className='circuit-group-label';
-      const guidance=group.toLowerCase()==='jump rope'
-        ? 'Complete each work/recovery interval for the rounds shown.'
-        : (rounds>1?'Complete one set of each exercise, then rest 60–90 sec before the next round.':'');
-      label.innerHTML=`<b>${group}${rounds?` · ${rounds}x`:''}</b><span>${guidance}</span>`;
-      card.insertAdjacentElement('beforebegin',label);
-    });
-  }
-
-  const baseRenderToday=renderToday;
-  renderToday=function(){baseRenderToday();addGroupLabels();};
-
-  addGroupLabels();
 })();
