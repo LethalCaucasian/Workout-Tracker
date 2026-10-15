@@ -34,7 +34,7 @@
     osc.start(now+at); osc.stop(now+at+duration+.03);
   }
   function patternLength(sound){
-    return sound==='pulse'?.9:sound==='chime'?1.15:sound==='digital'?.95:sound==='bell'?1.25:1.35;
+    return sound==='pulse' ? 0.9 : sound==='chime' ? 1.15 : sound==='digital' ? 0.95 : sound==='bell' ? 1.25 : 1.35;
   }
   function schedulePattern(ctx,sound,base=0){
     if(sound==='pulse'){
