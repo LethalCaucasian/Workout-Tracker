@@ -13,7 +13,7 @@
   `;
   document.head.appendChild(style);
 
-  const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const esc=value=>String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');
   const normalize=value=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
   const typeFor=item=>['reps','sec','min'].includes(item?.[2])?item[2]:'reps';
   const unitFor=type=>type==='sec'?'sec':type==='min'?'min':'reps';
@@ -87,6 +87,7 @@
   };
 
   function historyFor(kind,item,index){
+    const selectedDay=Number(state.selectedDay)||1;
     const name=normalize(item?.[0]);
     const type=typeFor(item);
     const field=kind==='warmup'?'warmupEntries':'cooldownEntries';
@@ -94,6 +95,7 @@
     const found=[];
     for(let i=(state.history||[]).length-1;i>=0;i--){
       const h=state.history[i];
+      if(Number(h?.day)!==selectedDay) continue;
       const entries=h?.[field]||[];
       let entry=id?entries.find(e=>e?.sectionId===id):null;
       if(!entry) entry=entries.find(e=>normalize(e?.name)===name && (e?.type||'reps')===type);
@@ -156,7 +158,7 @@
       card.dataset.sectionId=sectionId(kind,index);
       const prior=historyFor(kind,item,index);
       const existing=card.querySelector('.section-previous-setup');
-      const signature=prior.map(x=>`${x.history.id||x.history.date}:${x.entry.sectionId||''}:${x.entry.weight||0}:${x.entry.value||0}:${x.entry.type||'reps'}`).join('|');
+      const signature=`day:${dayKey()}|`+prior.map(x=>`${x.history.id||x.history.date}:${x.entry.sectionId||''}:${x.entry.weight||0}:${x.entry.value||0}:${x.entry.type||'reps'}`).join('|');
       if(existing?.dataset.signature===signature) return;
       if(existing) existing.remove();
       const panel=document.createElement('div');
