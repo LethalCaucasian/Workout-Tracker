@@ -18,20 +18,85 @@
   const typeFor=item=>['reps','sec','min'].includes(item?.[2])?item[2]:'reps';
   const unitFor=type=>type==='sec'?'sec':type==='min'?'min':'reps';
   const fmt=value=>{const n=Number(value||0);return Number.isInteger(n)?String(n):String(Math.round(n*100)/100);};
+  const newId=()=>globalThis.crypto?.randomUUID?`section-${crypto.randomUUID()}`:`section-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const dayKey=()=>String(Number(state.selectedDay)||1);
 
   function itemsFor(kind){
     if(kind==='warmup') return typeof warmupsForDay==='function' ? (warmupsForDay(state.selectedDay)||[]) : [];
     return typeof cooldownsForDay==='function' ? (cooldownsForDay(state.selectedDay)||[]) : [];
   }
 
-  function historyFor(kind,item){
+  function ensureIdState(){
+    if(!state.sectionItemIds || typeof state.sectionItemIds!=='object') state.sectionItemIds={};
+    if(!state.sectionItemIds.warmup || typeof state.sectionItemIds.warmup!=='object') state.sectionItemIds.warmup={};
+    if(!state.sectionItemIds.cooldown || typeof state.sectionItemIds.cooldown!=='object') state.sectionItemIds.cooldown={};
+  }
+  function idsFor(kind,items=itemsFor(kind),day=dayKey()){
+    ensureIdState();
+    if(!Array.isArray(state.sectionItemIds[kind][day])) state.sectionItemIds[kind][day]=[];
+    const ids=state.sectionItemIds[kind][day];
+    while(ids.length<items.length) ids.push(newId());
+    if(ids.length>items.length) ids.length=items.length;
+    return ids;
+  }
+  function sectionId(kind,index){return idsFor(kind)[index]||'';}
+  function moveSidecar(kind,index,dir){
+    const ids=idsFor(kind,kind==='warmup'?(warmupsForDay?.(state.selectedDay)||[]):(cooldownsForDay?.(state.selectedDay)||[]));
+    const j=index+dir;
+    if(j<0||j>=ids.length) return;
+    [ids[index],ids[j]]=[ids[j],ids[index]];
+    moveWeightState(kind,index,j);
+  }
+  function moveWeightState(kind,a,b){
+    const key=dayKey();
+    const arr=state.sectionWeightEnabled?.[kind]?.[key];
+    if(Array.isArray(arr)) [arr[a],arr[b]]=[arr[b],arr[a]];
+    if(kind==='warmup'){
+      const legacy=state.warmupWeightEnabled?.[key];
+      if(Array.isArray(legacy)) [legacy[a],legacy[b]]=[legacy[b],legacy[a]];
+    }
+  }
+  function spliceSidecar(kind,index){
+    const key=dayKey();
+    ensureIdState();
+    const ids=state.sectionItemIds[kind][key];
+    if(Array.isArray(ids)) ids.splice(index,1);
+    const weights=state.sectionWeightEnabled?.[kind]?.[key];
+    if(Array.isArray(weights)) weights.splice(index,1);
+    if(kind==='warmup'){
+      const legacy=state.warmupWeightEnabled?.[key];
+      if(Array.isArray(legacy)) legacy.splice(index,1);
+    }
+  }
+  function appendSidecar(kind){
+    const key=dayKey();ensureIdState();
+    if(!Array.isArray(state.sectionItemIds[kind][key])) state.sectionItemIds[kind][key]=[];
+    state.sectionItemIds[kind][key].push(newId());
+  }
+
+  window.WorkoutSectionIds={
+    get(kind,index,day=dayKey()){
+      const items=Number(day)===Number(state.selectedDay)?itemsFor(kind):[];
+      return idsFor(kind,items,day)[index]||'';
+    },
+    list(kind,items=itemsFor(kind),day=dayKey()){return [...idsFor(kind,items,day)];},
+    setList(kind,ids,day=dayKey()){
+      ensureIdState();state.sectionItemIds[kind][day]=Array.isArray(ids)?[...ids]:[];
+    },
+    newId
+  };
+
+  function historyFor(kind,item,index){
     const name=normalize(item?.[0]);
     const type=typeFor(item);
     const field=kind==='warmup'?'warmupEntries':'cooldownEntries';
+    const id=sectionId(kind,index);
     const found=[];
     for(let i=(state.history||[]).length-1;i>=0;i--){
       const h=state.history[i];
-      const entry=(h?.[field]||[]).find(e=>normalize(e?.name)===name && (e?.type||'reps')===type);
+      const entries=h?.[field]||[];
+      let entry=id?entries.find(e=>e?.sectionId===id):null;
+      if(!entry) entry=entries.find(e=>normalize(e?.name)===name && (e?.type||'reps')===type);
       if(entry) found.push({history:h,entry});
       if(found.length>=8) break;
     }
@@ -46,7 +111,7 @@
   }
 
   function setWeightMode(kind,index,enabled){
-    const day=String(Number(state.selectedDay)||1);
+    const day=dayKey();
     if(!state.sectionWeightEnabled || typeof state.sectionWeightEnabled!=='object') state.sectionWeightEnabled={};
     if(!state.sectionWeightEnabled[kind] || typeof state.sectionWeightEnabled[kind]!=='object') state.sectionWeightEnabled[kind]={};
     if(!Array.isArray(state.sectionWeightEnabled[kind][day])) state.sectionWeightEnabled[kind][day]=[];
@@ -60,7 +125,7 @@
 
   window.applySectionPreviousSetup=(kind,index,historyIndex)=>{
     const item=itemsFor(kind)[index];
-    const prior=historyFor(kind,item);
+    const prior=historyFor(kind,item,index);
     const picked=prior[Number(historyIndex)||0];
     if(!picked) return;
     const d=getDraft();
@@ -82,14 +147,16 @@
 
   function decorateSection(kind,root){
     const items=itemsFor(kind);
+    idsFor(kind,items);
     removeOverallDoneButtons(root);
     const cards=[...root.querySelectorAll(':scope > .history-ex')];
     cards.forEach((card,index)=>{
       const item=items[index];
       if(!item) return;
-      const prior=historyFor(kind,item);
+      card.dataset.sectionId=sectionId(kind,index);
+      const prior=historyFor(kind,item,index);
       const existing=card.querySelector('.section-previous-setup');
-      const signature=prior.map(x=>`${x.history.id||x.history.date}:${x.entry.weight||0}:${x.entry.value||0}:${x.entry.type||'reps'}`).join('|');
+      const signature=prior.map(x=>`${x.history.id||x.history.date}:${x.entry.sectionId||''}:${x.entry.weight||0}:${x.entry.value||0}:${x.entry.type||'reps'}`).join('|');
       if(existing?.dataset.signature===signature) return;
       if(existing) existing.remove();
       const panel=document.createElement('div');
@@ -107,6 +174,29 @@
       else card.appendChild(panel);
     });
   }
+
+  document.addEventListener('click',e=>{
+    const row=e.target.closest?.('.day-setup-backdrop .setup-item');
+    if(row){
+      const kind=row.dataset.kind;
+      const index=Number(row.dataset.index);
+      if(e.target.closest('.move-up')) moveSidecar(kind,index,-1);
+      else if(e.target.closest('.move-down')) moveSidecar(kind,index,1);
+      else if(e.target.closest('.delete')) spliceSidecar(kind,index);
+    }
+    if(e.target.closest?.('#addWarmupSetup')) appendSidecar('warmup');
+    if(e.target.closest?.('#addCooldownSetup')) appendSidecar('cooldown');
+    if(e.target.closest?.('#daySetupSave')){
+      ['warmup','cooldown'].forEach(kind=>{
+        const rows=[...document.querySelectorAll(`.day-setup-backdrop .setup-item[data-kind="${kind}"]`)];
+        if(!rows.length) return;
+        const old=idsFor(kind);
+        const kept=[];
+        rows.forEach((r,i)=>{if(String(r.querySelector('.setup-name')?.value||'').trim()) kept.push(old[i]||newId());});
+        window.WorkoutSectionIds.setList(kind,kept);
+      });
+    }
+  },true);
 
   function enhance(){
     const warm=document.querySelector('#todayContent .warmup');
