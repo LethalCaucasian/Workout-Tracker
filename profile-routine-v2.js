@@ -14,6 +14,8 @@
       customPlans:{},
       exerciseLibrary:{},
       warmupWeightEnabled:{},
+      sectionWeightEnabled:{warmup:{},cooldown:{}},
+      sectionItemIds:{warmup:{},cooldown:{}},
       routineBlank:true
     };
   }
@@ -25,7 +27,9 @@
       history:[],
       customPlans:clone(s.customPlans||{}),
       exerciseLibrary:clone(s.exerciseLibrary||{}),
-      warmupWeightEnabled:{},
+      warmupWeightEnabled:clone(s.warmupWeightEnabled||{}),
+      sectionWeightEnabled:clone(s.sectionWeightEnabled||{warmup:{},cooldown:{}}),
+      sectionItemIds:clone(s.sectionItemIds||{warmup:{},cooldown:{}}),
       routineBlank:!!s.routineBlank
     };
   }
