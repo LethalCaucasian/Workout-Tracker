@@ -28,6 +28,22 @@
     }catch{return null;}
   }
 
+  function meaningfulDraft(d){
+    if(!d||typeof d!=='object')return false;
+    if(String(d.notes||'').trim())return true;
+    const sections=[...(d.warmupEntries||[]),...(d.cooldownEntries||[])];
+    if(sections.some(x=>x?.done||String(x?.weight||'').trim()||String(x?.value||'').trim()))return true;
+    return (d.sets||[]).some(rows=>(rows||[]).some(x=>x?.done||String(x?.weight||'').trim()||String(x?.value||'').trim()));
+  }
+  function meaningfulProfilePayload(payload){
+    const d=payload?.data||payload?.state||{};
+    if(Array.isArray(d.history)&&d.history.length)return true;
+    if(d.customPlans&&Object.keys(d.customPlans).length)return true;
+    if(d.exerciseLibrary&&Object.keys(d.exerciseLibrary).length)return true;
+    if(d.routineBlank===true)return true;
+    return Object.values(d.drafts||{}).some(meaningfulDraft);
+  }
+
   function mergeManifest(remote,intended){
     if(!Array.isArray(remote?.profiles)||!Array.isArray(intended?.profiles))return intended;
     const merged=new Map();
@@ -49,6 +65,16 @@
       activeProfileId:active,
       profiles
     };
+  }
+
+  async function awaitStartupProtection(){
+    const gate=window.WorkoutStartupCloudReady;
+    if(gate){
+      try{await gate;}catch{}
+      if(window.WorkoutStartupCloudState?.failed){
+        throw new Error('Startup cloud check failed. Reload after the connection is restored before uploading workout data.');
+      }
+    }
   }
 
   async function fetchCurrent(url,body,headers){
@@ -77,6 +103,9 @@
       const encoded=encodeJsonBase64(mergeManifest(remote,intended));
       if(encoded)body.content=encoded;
     }else if(isProfileFile(url)&&intended&&remote){
+      if(meaningfulProfilePayload(remote)&&!meaningfulProfilePayload(intended)){
+        throw new Error('Protected synced workout data from a blank-device overwrite. Pull the cloud copy first.');
+      }
       const intendedTime=Number(intended.updatedAt||0),remoteTime=Number(remote.updatedAt||0);
       if(remoteTime&&intendedTime&&remoteTime>intendedTime){
         throw new Error('Remote workout data is newer on GitHub. Pull Now, then retry the sync.');
@@ -87,6 +116,7 @@
   }
 
   async function runWrite(input,init){
+    await awaitStartupProtection();
     let prepared=await prepare(input,init);
     let res=await baseFetch(input,prepared);
     if(res.ok||![409,422].includes(res.status)||requestMethod(input,init)!=='PUT')return res;
