@@ -29,6 +29,7 @@
   function sessionsFor(key){
     const rows=[];
     (state.history||[]).forEach((h,historyIndex)=>{
+      if(window.WorkoutProgressTools?.inRange && !WorkoutProgressTools.inRange(h.date))return;
       (h.exercises||[]).forEach((ex,exerciseIndex)=>{
         if(keyFor(ex)!==key)return;
         let maxWeight=0,maxReps=0,maxSeconds=0;
@@ -104,7 +105,8 @@
     const hasHold=sessions.some(s=>s.sets.some(set=>set.mode==='sec'||set.mode==='min'));
     const overlay=ensureModal();
     overlay.querySelector('#exerciseDetailTitle').textContent=name;
-    overlay.querySelector('#exerciseDetailSub').textContent=`${sessions.length} saved session${sessions.length===1?'':'s'} • ${dateLabel(sessions[0].date)} to ${dateLabel(sessions[sessions.length-1].date)}`;
+    const range=window.WorkoutProgressTools?.rangeLabel?.()||'All Time';
+    overlay.querySelector('#exerciseDetailSub').textContent=`${range} • ${sessions.length} saved session${sessions.length===1?'':'s'} • ${dateLabel(sessions[0].date)} to ${dateLabel(sessions[sessions.length-1].date)}`;
     const metric=(label,value)=>`<div class="exercise-detail-metric"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
     const metrics=[metric('Best Weight',maxWeight?`${fmt(maxWeight)} lb`:'—')];
     if(hasReps)metrics.push(metric('Best Reps',maxReps?fmt(maxReps):'—'));
@@ -117,8 +119,8 @@
 
   const grid=document.getElementById('progressGrid');
   if(grid){
-    grid.addEventListener('click',e=>{const card=e.target.closest('.pr[data-progress-key]');if(card&&grid.contains(card))open(card.dataset.progressKey,card);});
-    grid.addEventListener('keydown',e=>{const card=e.target.closest('.pr[data-progress-key]');if(!card)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();open(card.dataset.progressKey,card);}});
+    grid.addEventListener('click',e=>{if(e.target.closest('.progress-pin'))return;const card=e.target.closest('.pr[data-progress-key]');if(card&&grid.contains(card))open(card.dataset.progressKey,card);});
+    grid.addEventListener('keydown',e=>{if(e.target.closest('.progress-pin'))return;const card=e.target.closest('.pr[data-progress-key]');if(!card)return;if(e.key==='Enter'||e.key===' '){e.preventDefault();open(card.dataset.progressKey,card);}});
   }
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('exerciseDetailOverlay')?.classList.contains('show'))close();});
   window.addEventListener('workout-profile-store-change',close);
