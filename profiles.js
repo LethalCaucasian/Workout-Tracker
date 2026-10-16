@@ -183,7 +183,8 @@
     const p=activeProfile();
     if(!p) return;
     if(profileStore.profiles.length<=1){alert('Keep at least one profile.');return;}
-    if(!confirm(`Delete ${p.name}? This removes that profile's local workout history and drafts.`)) return;
+    if(!confirm(`Delete ${p.name}? This removes that profile's workout history, drafts, fitness profile, and weight history.`)) return;
+    if(!confirm(`Final check: permanently delete ${p.name}? This action cannot be undone from this device.`)) return;
     profileStore.profiles=profileStore.profiles.filter(x=>x.id!==p.id);
     profileStore.activeProfileId=profileStore.profiles[0].id;
     profileStore.updatedAt=Date.now();
