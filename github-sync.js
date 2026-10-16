@@ -137,6 +137,27 @@
     });
   }
 
+  function deletionMap(...sources){
+    const out={};
+    sources.forEach(source=>{
+      if(!source||typeof source!=='object'||Array.isArray(source))return;
+      Object.entries(source).forEach(([id,ts])=>{
+        const n=Number(ts||0);
+        if(id&&n>0)out[String(id)]=Math.max(Number(out[String(id)]||0),n);
+      });
+    });
+    return out;
+  }
+
+  function localDeletions(){
+    try{return window.WorkoutProfileDeletions?.load?.()||{};}catch{return {};}
+  }
+
+  function isDeleted(profile,deletions){
+    const id=String(profile?.id||''),deletedAt=Number(deletions[id]||0),updatedAt=Number(profile?.updatedAt||0);
+    return !!(id&&deletedAt&&deletedAt>=updatedAt);
+  }
+
   function localBundle(){
     if(window.WorkoutProfiles) return WorkoutProfiles.exportData();
     return {
@@ -160,7 +181,11 @@
     }
 
     if(value?.kind!==MANIFEST_KIND || !Array.isArray(value.profiles)) throw new Error('Remote manifest is not valid workout profile data');
-    const loaded=await Promise.all(value.profiles.map(async meta=>{
+    // Local tombstones are included here so a just-deleted profile cannot break
+    // auto-sync while its remote manifest/file cleanup is still finishing.
+    const deletedProfiles=deletionMap(value.deletedProfiles,localDeletions());
+    const metas=value.profiles.filter(meta=>!isDeleted(meta,deletedProfiles));
+    const loaded=await Promise.all(metas.map(async meta=>{
       const file=await fetchJsonFile(meta.file || profileFilePath(meta.id));
       if(!file?.value) throw new Error(`Missing profile file for ${meta.name || meta.id}`);
       const payload=file.value;
@@ -176,11 +201,12 @@
     return {
       legacy:false,
       sha:remote.sha,
-      updatedAt:Number(value.updatedAt || 0),
+      updatedAt:Math.max(Number(value.updatedAt || 0),0,...Object.values(deletedProfiles).map(x=>Number(x||0))),
       bundle:{
         kind:'workout-tracker-profiles',version:1,
         activeProfileId:value.activeProfileId || loaded[0]?.id,
-        updatedAt:Number(value.updatedAt || Date.now()),
+        updatedAt:Math.max(Number(value.updatedAt || Date.now()),0,...Object.values(deletedProfiles).map(x=>Number(x||0))),
+        deletedProfiles,
         profiles:loaded
       }
     };
@@ -199,8 +225,10 @@
       const bundle=localBundle();
       const now=Date.now();
       if(!bundle.updatedAt) bundle.updatedAt=now;
+      const deletedProfiles=deletionMap(bundle.deletedProfiles,localDeletions());
+      const profiles=(bundle.profiles||[]).filter(profile=>!isDeleted(profile,deletedProfiles));
 
-      await Promise.all(bundle.profiles.map(profile=>putJsonFile(
+      await Promise.all(profiles.map(profile=>putJsonFile(
         profileFilePath(profile.id),
         {
           kind:'workout-tracker-profile',version:1,
@@ -211,11 +239,13 @@
         `Sync workout profile: ${profile.name}`
       )));
 
+      const deletionTime=Math.max(0,...Object.values(deletedProfiles).map(x=>Number(x||0)));
       const manifest={
         kind:MANIFEST_KIND,version:1,
-        updatedAt:Number(bundle.updatedAt || now),
-        activeProfileId:bundle.activeProfileId,
-        profiles:bundle.profiles.map(profile=>({
+        updatedAt:Math.max(Number(bundle.updatedAt || now),deletionTime),
+        activeProfileId:profiles.some(p=>p.id===bundle.activeProfileId)?bundle.activeProfileId:profiles[0]?.id,
+        deletedProfiles,
+        profiles:profiles.map(profile=>({
           id:profile.id,name:profile.name,
           createdAt:profile.createdAt,updatedAt:profile.updatedAt,
           file:profileFilePath(profile.id)
@@ -226,7 +256,7 @@
       settings.initialized=true;
       settings.lastSync=Date.now();
       persistSettings();
-      status(`Synced ${bundle.profiles.length} profile${bundle.profiles.length===1?'':'s'} • ${new Date(settings.lastSync).toLocaleString()}`,'ok');
+      status(`Synced ${profiles.length} profile${profiles.length===1?'':'s'} • ${new Date(settings.lastSync).toLocaleString()}`,'ok');
     }catch(err){
       status(`GitHub sync failed: ${err.message}`,'err');
     }finally{
@@ -281,7 +311,8 @@
     try{
       const remote=await fetchRemoteBundle();
       const local=localBundle();
-      const localTime=Number(local.updatedAt || 0);
+      const localDeletionTime=Math.max(0,...Object.values(localDeletions()).map(x=>Number(x||0)));
+      const localTime=Math.max(Number(local.updatedAt || 0),localDeletionTime);
       const remoteTime=Number(remote?.updatedAt || 0);
 
       if(remote && remoteTime>localTime){
@@ -368,7 +399,7 @@
   }
 
   function escapeHtml(value){
-    return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');
   }
 
   injectUi();
