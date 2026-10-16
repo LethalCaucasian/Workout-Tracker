@@ -15,6 +15,7 @@
       <button class="tabbtn active" data-tab="today">Today</button>
       <button class="tabbtn" data-tab="history">History</button>
       <button class="tabbtn" data-tab="progress">Progress</button>
+      <button class="tabbtn" data-tab="profile">Profile</button>
       <button class="tabbtn" data-tab="settings">Data</button>
     </div>
   </div>
@@ -32,6 +33,14 @@
   <section id="progress" class="section">
     <div class="hero"><h1>Progress</h1><div class="sub">Best weight, reps, holds, and total reps for the selected profile.</div></div>
     <div id="progressGrid" class="prgrid"></div>
+  </section>
+
+  <section id="profile" class="section">
+    <div class="hero">
+      <h1>Profile</h1>
+      <div class="sub">Profile-specific fitness details, goals, weight trend, and calculated estimates.</div>
+    </div>
+    <div id="fitnessProfileContent"></div>
   </section>
 
   <section id="settings" class="section">
@@ -93,6 +102,7 @@
 <script src="family-copy-link-v20.js"></script>
 <script src="date-rollover-v21.js"></script>
 <script src="no-volume-v22.js"></script>
-<!-- workout volume removed v22 -->
+<script src="profile-fitness-v23.js"></script>
+<!-- fitness profile and weight trends v23 -->
 </body>
 </html>
