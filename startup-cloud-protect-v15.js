@@ -58,13 +58,33 @@
     if(d.routineBlank===true) return true;
     return Object.values(d.drafts||{}).some(meaningfulDraft);
   }
+  function deletionMap(...sources){
+    const out={};
+    sources.forEach(source=>{
+      if(!source||typeof source!=='object'||Array.isArray(source))return;
+      Object.entries(source).forEach(([id,ts])=>{
+        const n=Number(ts||0);
+        if(id&&n>0)out[String(id)]=Math.max(Number(out[String(id)]||0),n);
+      });
+    });
+    return out;
+  }
+  function localDeletions(){
+    try{return window.WorkoutProfileDeletions?.load?.()||{};}catch{return {};}
+  }
+  function isDeleted(p,deletions){
+    const id=String(p?.id||''),deletedAt=Number(deletions[id]||0),updatedAt=Number(p?.updatedAt||0);
+    return !!(id&&deletedAt&&deletedAt>=updatedAt);
+  }
   async function remoteBundle(cfg){
     const manifest=await fetchJson(cfg,cfg.path);
     if(!manifest) return null;
     const m=manifest.value;
     if(m?.history&&m?.drafts) return {legacy:true,state:m};
     if(m?.kind!==MANIFEST_KIND||!Array.isArray(m.profiles)) throw new Error('Remote manifest is not valid workout profile data');
-    const profiles=await Promise.all(m.profiles.map(async meta=>{
+    const deletedProfiles=deletionMap(m.deletedProfiles);
+    const metas=m.profiles.filter(meta=>!isDeleted(meta,deletedProfiles));
+    const profiles=await Promise.all(metas.map(async meta=>{
       const file=await fetchJson(cfg,meta.file||profilePath(cfg,meta.id));
       if(!file?.value) throw new Error(`Missing profile file for ${meta.name||meta.id}`);
       const p=file.value;
@@ -77,14 +97,17 @@
     return {legacy:false,bundle:{
       kind:'workout-tracker-profiles',version:1,
       activeProfileId:m.activeProfileId||profiles[0]?.id,
-      updatedAt:Number(m.updatedAt||0),profiles
+      updatedAt:Number(m.updatedAt||0),deletedProfiles,profiles
     }};
   }
   function merge(local,remote){
+    const deletions=deletionMap(remote.deletedProfiles,local.deletedProfiles,localDeletions());
     const map=new Map();
-    (remote.profiles||[]).forEach(p=>{if(p?.id)map.set(String(p.id),clone(p));});
+    (remote.profiles||[]).forEach(p=>{
+      if(p?.id&&!isDeleted(p,deletions))map.set(String(p.id),clone(p));
+    });
     (local.profiles||[]).forEach(p=>{
-      if(!p?.id) return;
+      if(!p?.id||isDeleted(p,deletions)) return;
       const id=String(p.id),r=map.get(id),meaningful=meaningfulProfile(p);
       if(!r){
         if(meaningful||String(p.name||'')!=='My Profile') map.set(id,clone(p));
@@ -92,11 +115,12 @@
       }
       if(meaningful&&Number(p.updatedAt||0)>Number(r.updatedAt||0)) map.set(id,clone(p));
     });
-    const profiles=[...map.values()];
+    const profiles=[...map.values()].filter(p=>!isDeleted(p,deletions));
     const active=profiles.some(p=>p.id===local.activeProfileId)?local.activeProfileId:
       (profiles.some(p=>p.id===remote.activeProfileId)?remote.activeProfileId:profiles[0]?.id);
-    const updatedAt=Math.max(Number(remote.updatedAt||0),...profiles.map(p=>Number(p.updatedAt||0)),0);
-    return {kind:'workout-tracker-profiles',version:1,activeProfileId:active,updatedAt,profiles};
+    const deletionTime=Math.max(0,...Object.values(deletions).map(x=>Number(x||0)));
+    const updatedAt=Math.max(Number(remote.updatedAt||0),Number(local.updatedAt||0),deletionTime,...profiles.map(p=>Number(p.updatedAt||0)),0);
+    return {kind:'workout-tracker-profiles',version:1,activeProfileId:active,updatedAt,deletedProfiles:deletions,profiles};
   }
   function setStatus(text,type=''){
     const el=document.getElementById('ghSyncStatus');
@@ -126,6 +150,7 @@
       }else{
         const local=WorkoutProfiles.getStore();
         const combined=merge(local,remote.bundle);
+        if(!combined.profiles.length) throw new Error('Cloud merge would leave no workout profiles');
         WorkoutProfiles.importData(combined,{preserveActive:true,notify:false});
       }
       const latest=settings();
