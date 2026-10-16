@@ -19,12 +19,17 @@
   `;
   document.head.appendChild(style);
 
-  function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function esc(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');}
   function slug(v){return String(v||'exercise').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'exercise';}
   function fmt(v){const n=Number(v||0);return Number.isInteger(n)?String(n):String(Math.round(n*100)/100);}
   function dateLabel(date){const d=new Date(`${date}T12:00:00`);return Number.isNaN(d.getTime())?date:d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});}
   function modeFor(ex,set){const t=['reps','sec','min','mixed'].includes(ex?.type)?ex.type:'reps';return t==='mixed'&&['reps','sec','min'].includes(set?.mode)?set.mode:t==='mixed'?'reps':t;}
   function keyFor(ex){return ex?.exerciseId||`legacy-${slug(ex?.name)}`;}
+  function betterPair(weight,value,bestWeight,bestValue){
+    const w=Number(weight||0),v=Number(value||0),bw=Number(bestWeight||0),bv=Number(bestValue||0);
+    if(v<=0)return false;
+    return w>bw || (w===bw && v>bv);
+  }
 
   function sessionsFor(key){
     const rows=[];
@@ -32,14 +37,20 @@
       if(window.WorkoutProgressTools?.inRange && !WorkoutProgressTools.inRange(h.date))return;
       (h.exercises||[]).forEach((ex,exerciseIndex)=>{
         if(keyFor(ex)!==key)return;
-        let maxWeight=0,maxReps=0,maxSeconds=0;
+        let repWeight=0,maxReps=0,holdWeight=0,maxSeconds=0,hasReps=false,hasHold=false;
         const sets=(ex.sets||[]).map((s,i)=>{
           const mode=modeFor(ex,s),weight=Number(s?.weight||0),value=Number(s?.value||0),seconds=mode==='min'?value*60:mode==='sec'?value:0;
-          maxWeight=Math.max(maxWeight,weight);
-          if(mode==='reps')maxReps=Math.max(maxReps,value);else maxSeconds=Math.max(maxSeconds,seconds);
+          if(mode==='reps'){
+            hasReps=true;
+            if(betterPair(weight,value,repWeight,maxReps)){repWeight=weight;maxReps=value;}
+          }else{
+            hasHold=true;
+            if(betterPair(weight,seconds,holdWeight,maxSeconds)){holdWeight=weight;maxSeconds=seconds;}
+          }
           return {index:i+1,mode,weight,value,seconds,done:s?.done};
         });
-        rows.push({date:String(h.date||''),name:ex.name||'Exercise',sets,maxWeight,maxReps,maxSeconds,historyIndex,exerciseIndex});
+        const maxWeight=hasReps&&!hasHold?repWeight:hasHold&&!hasReps?holdWeight:Math.max(repWeight,holdWeight);
+        rows.push({date:String(h.date||''),name:ex.name||'Exercise',sets,maxWeight,maxReps,maxSeconds,repWeight,holdWeight,hasReps,hasHold,historyIndex,exerciseIndex});
       });
     });
     rows.sort((a,b)=>a.date.localeCompare(b.date)||a.historyIndex-b.historyIndex||a.exerciseIndex-b.exerciseIndex);
@@ -56,11 +67,15 @@
     return weight||value||'—';
   }
 
+  function pairText(weight,value,unit){
+    if(!value)return '';
+    return weight?`${fmt(weight)} lb × ${fmt(value)} ${unit}`:`${fmt(value)} ${unit}`;
+  }
+
   function bestText(s){
     const parts=[];
-    if(s.maxWeight)parts.push(`${fmt(s.maxWeight)} lb`);
-    if(s.maxReps)parts.push(`${fmt(s.maxReps)} reps`);
-    if(s.maxSeconds)parts.push(`${fmt(s.maxSeconds)} sec`);
+    if(s.hasReps&&s.maxReps)parts.push(pairText(s.repWeight,s.maxReps,'reps'));
+    if(s.hasHold&&s.maxSeconds)parts.push(pairText(s.holdWeight,s.maxSeconds,'sec'));
     return parts.join(' • ')||'No recorded value';
   }
 
@@ -98,11 +113,14 @@
     const sessions=sessionsFor(key);if(!sessions.length)return;
     lastFocus=source||document.activeElement;
     const name=sessions[sessions.length-1].name;
-    const maxWeight=Math.max(0,...sessions.map(s=>s.maxWeight));
-    const maxReps=Math.max(0,...sessions.map(s=>s.maxReps));
-    const maxSeconds=Math.max(0,...sessions.map(s=>s.maxSeconds));
-    const hasReps=sessions.some(s=>s.sets.some(set=>set.mode==='reps'));
-    const hasHold=sessions.some(s=>s.sets.some(set=>set.mode==='sec'||set.mode==='min'));
+    let bestRepWeight=0,maxReps=0,bestHoldWeight=0,maxSeconds=0;
+    sessions.forEach(s=>{
+      if(betterPair(s.repWeight,s.maxReps,bestRepWeight,maxReps)){bestRepWeight=s.repWeight;maxReps=s.maxReps;}
+      if(betterPair(s.holdWeight,s.maxSeconds,bestHoldWeight,maxSeconds)){bestHoldWeight=s.holdWeight;maxSeconds=s.maxSeconds;}
+    });
+    const hasReps=sessions.some(s=>s.hasReps);
+    const hasHold=sessions.some(s=>s.hasHold);
+    const maxWeight=hasReps&&!hasHold?bestRepWeight:hasHold&&!hasReps?bestHoldWeight:Math.max(bestRepWeight,bestHoldWeight);
     const overlay=ensureModal();
     overlay.querySelector('#exerciseDetailTitle').textContent=name;
     const range=window.WorkoutProgressTools?.rangeLabel?.()||'All Time';
@@ -113,7 +131,7 @@
     if(hasHold)metrics.push(metric('Best Hold',maxSeconds?`${fmt(maxSeconds)} sec`:'—'));
     metrics.push(metric('Sessions',fmt(sessions.length)));
     const history=[...sessions].reverse().map(s=>`<div class="exercise-session"><div class="exercise-session-head"><div class="exercise-session-date">${esc(dateLabel(s.date))}</div><div class="exercise-session-best">${esc(bestText(s))}</div></div><div class="exercise-set-list">${s.sets.length?s.sets.map(set=>`<div class="exercise-set-row"><span>Set ${set.index}</span><span>${esc(setText(set))}</span></div>`).join(''):'<div class="exercise-detail-empty">No saved sets.</div>'}</div></div>`).join('');
-    overlay.querySelector('#exerciseDetailBody').innerHTML=`<div class="exercise-detail-metrics">${metrics.join('')}</div><div class="exercise-detail-section"><h3>Progress over time</h3>${chart('Best weight',sessions,'maxWeight','lb')}${hasReps?chart('Best reps',sessions,'maxReps','reps'):''}${hasHold?chart('Best hold',sessions,'maxSeconds','sec'):''}${(!maxWeight&&!maxReps&&!maxSeconds?'<div class="exercise-detail-empty">No chartable values yet.</div>':'')}</div><div class="exercise-detail-section"><h3>Workout history</h3><div class="exercise-session-list">${history}</div></div>`;
+    overlay.querySelector('#exerciseDetailBody').innerHTML=`<div class="exercise-detail-metrics">${metrics.join('')}</div><div class="exercise-detail-section"><h3>Progress over time</h3>${chart('Best weight',sessions,'maxWeight','lb')}${hasReps?chart('Reps at best weight',sessions,'maxReps','reps'):''}${hasHold?chart('Hold at best weight',sessions,'maxSeconds','sec'):''}${(!maxWeight&&!maxReps&&!maxSeconds?'<div class="exercise-detail-empty">No chartable values yet.</div>':'')}</div><div class="exercise-detail-section"><h3>Workout history</h3><div class="exercise-session-list">${history}</div></div>`;
     overlay.classList.add('show');document.body.style.overflow='hidden';overlay.querySelector('#exerciseDetailClose').focus();
   }
 
