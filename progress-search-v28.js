@@ -4,6 +4,7 @@
     .progress-search-wrap{position:relative;margin:0 0 10px}
     .progress-search{width:100%;box-sizing:border-box;background:#091321;color:#fff;border:1px solid #2b3f5e;border-radius:11px;padding:11px 38px 11px 12px;font-size:15px;outline:none}
     .progress-search:focus{border-color:#3ba8ff}
+    .progress-search::-webkit-search-cancel-button,.progress-search::-webkit-search-decoration{-webkit-appearance:none;appearance:none;display:none}
     .progress-search-clear{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;border-radius:8px;background:transparent;color:#91a2b8;font-size:20px;line-height:1;display:none;align-items:center;justify-content:center}
     .progress-search-clear.show{display:flex}
     .progress-search-empty{display:none;padding:18px 12px;text-align:center;color:#91a2b8;border:1px solid #20314b;border-radius:11px;background:#0d1827;margin-top:8px}
@@ -22,9 +23,10 @@
       wrap=document.createElement('div');
       wrap.id='progressSearchWrap';
       wrap.className='progress-search-wrap';
-      // Use a normal text input with a search keyboard hint so iOS does not add
-      // its own clear button beside our custom clear control.
-      wrap.innerHTML=`<input id="progressSearch" class="progress-search" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="Search exercises…" aria-label="Search progress exercises"><button id="progressSearchClear" class="progress-search-clear" type="button" aria-label="Clear search">×</button><div id="progressSearchEmpty" class="progress-search-empty">No matching exercises.</div>`;
+      // Plain text input avoids browser-supplied clear controls. enterkeyhint keeps
+      // a Search action on supported phone keyboards while our single custom X
+      // remains the only clear button across iPhone and desktop Chrome.
+      wrap.innerHTML=`<input id="progressSearch" class="progress-search" type="text" enterkeyhint="search" autocomplete="off" spellcheck="false" placeholder="Search exercises…" aria-label="Search progress exercises"><button id="progressSearchClear" class="progress-search-clear" type="button" aria-label="Clear search">×</button><div id="progressSearchEmpty" class="progress-search-empty">No matching exercises.</div>`;
       grid.parentNode.insertBefore(wrap,grid);
       const input=wrap.querySelector('#progressSearch');
       const clear=wrap.querySelector('#progressSearchClear');
