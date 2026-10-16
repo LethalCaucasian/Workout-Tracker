@@ -9,7 +9,7 @@
     .pr[data-progress-key]{cursor:pointer}
     .pr[data-progress-key]:focus-visible{outline:2px solid #3ba8ff;outline-offset:2px}
     .progress-open-hint{margin-top:9px;color:#78bfff;font-size:11px;font-weight:800}
-    @media(min-width:720px){.progress-metrics{grid-template-columns:repeat(5,minmax(0,1fr))}}
+    @media(min-width:720px){.progress-metrics{grid-template-columns:repeat(auto-fit,minmax(95px,1fr))}}
   `;
   document.head.appendChild(style);
 
@@ -26,13 +26,19 @@
     const by={};
     (state.history||[]).forEach(h=>(h.exercises||[]).forEach(e=>{
       const key=e.exerciseId||`legacy-${slug(e.name)}`;
-      if(!by[key]) by[key]={name:e.name,maxWeight:0,maxReps:0,maxSeconds:0,totalReps:0,sessions:0};
+      if(!by[key]) by[key]={name:e.name,maxWeight:0,maxReps:0,maxSeconds:0,totalReps:0,sessions:0,hasReps:false,hasHold:false};
       const o=by[key];o.name=e.name||o.name;o.sessions++;
       (e.sets||[]).forEach(s=>{
         const mode=setMode(e,s),w=Number(s.weight||0),v=Number(s.value||0);
         o.maxWeight=Math.max(o.maxWeight,w);
-        if(mode==='reps'){o.maxReps=Math.max(o.maxReps,v);o.totalReps+=v;}
-        else o.maxSeconds=Math.max(o.maxSeconds,mode==='min'?v*60:v);
+        if(mode==='reps'){
+          o.hasReps=true;
+          o.maxReps=Math.max(o.maxReps,v);
+          o.totalReps+=v;
+        }else{
+          o.hasHold=true;
+          o.maxSeconds=Math.max(o.maxSeconds,mode==='min'?v*60:v);
+        }
       });
     }));
 
@@ -44,7 +50,11 @@
       const o=by[k];
       const lead=o.maxWeight?`${formatValue(o.maxWeight)} lb`:o.maxReps?`${formatValue(o.maxReps)} reps`:o.maxSeconds?`${formatValue(o.maxSeconds)} sec`:'—';
       const metric=(label,value)=>`<div class="progress-metric"><b>${value}</b><span>${label}</span></div>`;
-      return `<div class="pr" data-progress-key="${esc(k)}" role="button" tabindex="0" aria-label="View ${esc(o.name)} progress details"><h4>${esc(o.name)}</h4><div class="big">${lead}</div><div class="progress-metrics">${metric('Best Weight',o.maxWeight?`${formatValue(o.maxWeight)} lb`:'—')}${metric('Best Reps',o.maxReps?formatValue(o.maxReps):'—')}${metric('Best Hold',o.maxSeconds?`${formatValue(o.maxSeconds)} sec`:'—')}${metric('Total Reps',formatValue(o.totalReps))}${metric('Sessions',formatValue(o.sessions))}</div><div class="progress-open-hint">View details →</div></div>`;
+      const metrics=[metric('Best Weight',o.maxWeight?`${formatValue(o.maxWeight)} lb`:'—')];
+      if(o.hasReps) metrics.push(metric('Best Reps',o.maxReps?formatValue(o.maxReps):'—'));
+      if(o.hasHold) metrics.push(metric('Best Hold',o.maxSeconds?`${formatValue(o.maxSeconds)} sec`:'—'));
+      metrics.push(metric('Total Reps',formatValue(o.totalReps)),metric('Sessions',formatValue(o.sessions)));
+      return `<div class="pr" data-progress-key="${esc(k)}" role="button" tabindex="0" aria-label="View ${esc(o.name)} progress details"><h4>${esc(o.name)}</h4><div class="big">${lead}</div><div class="progress-metrics">${metrics.join('')}</div><div class="progress-open-hint">View details →</div></div>`;
     }).join('');
   };
 
