@@ -22,7 +22,9 @@
       wrap=document.createElement('div');
       wrap.id='progressSearchWrap';
       wrap.className='progress-search-wrap';
-      wrap.innerHTML=`<input id="progressSearch" class="progress-search" type="search" inputmode="search" autocomplete="off" placeholder="Search exercises…" aria-label="Search progress exercises"><button id="progressSearchClear" class="progress-search-clear" type="button" aria-label="Clear search">×</button><div id="progressSearchEmpty" class="progress-search-empty">No matching exercises.</div>`;
+      // Use a normal text input with a search keyboard hint so iOS does not add
+      // its own clear button beside our custom clear control.
+      wrap.innerHTML=`<input id="progressSearch" class="progress-search" type="text" inputmode="search" enterkeyhint="search" autocomplete="off" placeholder="Search exercises…" aria-label="Search progress exercises"><button id="progressSearchClear" class="progress-search-clear" type="button" aria-label="Clear search">×</button><div id="progressSearchEmpty" class="progress-search-empty">No matching exercises.</div>`;
       grid.parentNode.insertBefore(wrap,grid);
       const input=wrap.querySelector('#progressSearch');
       const clear=wrap.querySelector('#progressSearchClear');
