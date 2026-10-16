@@ -10,7 +10,7 @@
     .exercise-detail-head h2{margin:0;font-size:22px}.exercise-detail-sub{margin-top:3px;color:#91a2b8;font-size:12px}
     .exercise-detail-close{flex:0 0 auto;width:36px;height:36px;border:1px solid #314661;border-radius:10px;background:#101f33;color:#dbe7f5;font-size:22px;line-height:1}
     .exercise-detail-body{padding:14px}
-    .exercise-detail-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}
+    .exercise-detail-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px}
     .exercise-detail-metric{border:1px solid #243651;background:#091321;border-radius:10px;padding:10px;min-width:0}.exercise-detail-metric b{display:block;font-size:18px}.exercise-detail-metric span{display:block;margin-top:3px;color:#91a2b8;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.35px}
     .exercise-detail-section{margin-top:12px}.exercise-detail-section h3{margin:0 0 7px;font-size:15px}
     .exercise-detail-chart{border:1px solid #243651;background:#091321;border-radius:12px;padding:8px;margin-bottom:9px}.exercise-detail-chart-title{font-size:11px;font-weight:900;color:#a8b7c9;text-transform:uppercase;letter-spacing:.4px;margin:2px 4px 6px}.exercise-detail-chart svg{display:block;width:100%;height:auto}.exercise-detail-chart .grid{stroke:#22334c;stroke-width:1}.exercise-detail-chart .line{fill:none;stroke:#3ba8ff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.exercise-detail-chart .dot{fill:#42d38a;stroke:#091321;stroke-width:2}.exercise-detail-chart text{fill:#91a2b8;font-size:10px;font-family:Inter,system-ui,sans-serif}
@@ -100,12 +100,18 @@
     const maxWeight=Math.max(0,...sessions.map(s=>s.maxWeight));
     const maxReps=Math.max(0,...sessions.map(s=>s.maxReps));
     const maxSeconds=Math.max(0,...sessions.map(s=>s.maxSeconds));
+    const hasReps=sessions.some(s=>s.sets.some(set=>set.mode==='reps'));
+    const hasHold=sessions.some(s=>s.sets.some(set=>set.mode==='sec'||set.mode==='min'));
     const overlay=ensureModal();
     overlay.querySelector('#exerciseDetailTitle').textContent=name;
     overlay.querySelector('#exerciseDetailSub').textContent=`${sessions.length} saved session${sessions.length===1?'':'s'} • ${dateLabel(sessions[0].date)} to ${dateLabel(sessions[sessions.length-1].date)}`;
     const metric=(label,value)=>`<div class="exercise-detail-metric"><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
+    const metrics=[metric('Best Weight',maxWeight?`${fmt(maxWeight)} lb`:'—')];
+    if(hasReps)metrics.push(metric('Best Reps',maxReps?fmt(maxReps):'—'));
+    if(hasHold)metrics.push(metric('Best Hold',maxSeconds?`${fmt(maxSeconds)} sec`:'—'));
+    metrics.push(metric('Sessions',fmt(sessions.length)));
     const history=[...sessions].reverse().map(s=>`<div class="exercise-session"><div class="exercise-session-head"><div class="exercise-session-date">${esc(dateLabel(s.date))}</div><div class="exercise-session-best">${esc(bestText(s))}</div></div><div class="exercise-set-list">${s.sets.length?s.sets.map(set=>`<div class="exercise-set-row"><span>Set ${set.index}</span><span>${esc(setText(set))}</span></div>`).join(''):'<div class="exercise-detail-empty">No saved sets.</div>'}</div></div>`).join('');
-    overlay.querySelector('#exerciseDetailBody').innerHTML=`<div class="exercise-detail-metrics">${metric('Best Weight',maxWeight?`${fmt(maxWeight)} lb`:'—')}${metric('Best Reps',maxReps?fmt(maxReps):'—')}${metric('Best Hold',maxSeconds?`${fmt(maxSeconds)} sec`:'—')}${metric('Sessions',fmt(sessions.length))}</div><div class="exercise-detail-section"><h3>Progress over time</h3>${chart('Best weight',sessions,'maxWeight','lb')}${chart('Best reps',sessions,'maxReps','reps')}${chart('Best hold',sessions,'maxSeconds','sec')||(!maxWeight&&!maxReps?'<div class="exercise-detail-empty">No chartable values yet.</div>':'')}</div><div class="exercise-detail-section"><h3>Workout history</h3><div class="exercise-session-list">${history}</div></div>`;
+    overlay.querySelector('#exerciseDetailBody').innerHTML=`<div class="exercise-detail-metrics">${metrics.join('')}</div><div class="exercise-detail-section"><h3>Progress over time</h3>${chart('Best weight',sessions,'maxWeight','lb')}${hasReps?chart('Best reps',sessions,'maxReps','reps'):''}${hasHold?chart('Best hold',sessions,'maxSeconds','sec'):''}${(!maxWeight&&!maxReps&&!maxSeconds?'<div class="exercise-detail-empty">No chartable values yet.</div>':'')}</div><div class="exercise-detail-section"><h3>Workout history</h3><div class="exercise-session-list">${history}</div></div>`;
     overlay.classList.add('show');document.body.style.overflow='hidden';overlay.querySelector('#exerciseDetailClose').focus();
   }
 
