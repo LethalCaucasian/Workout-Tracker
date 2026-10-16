@@ -45,13 +45,15 @@
   // Fix an already-stale draft as soon as this version loads.
   refreshDate(true);
 
-  // Keep the date correct when an iPhone app tab survives across midnight,
-  // returns from the background, or receives freshly synced profile data.
+  // Keep the date correct when an iPhone app tab survives across midnight or
+  // returns from the background. Profile-store changes happen on every typed
+  // workout value, so never force a full Today re-render from that event or
+  // the active input loses focus and the mobile keyboard closes.
   document.addEventListener('visibilitychange',()=>{
     if(!document.hidden) refreshDate();
   });
   window.addEventListener('pageshow',()=>refreshDate());
   window.addEventListener('focus',()=>refreshDate());
-  window.addEventListener('workout-profile-store-change',()=>setTimeout(()=>refreshDate(true),0));
+  window.addEventListener('workout-profile-store-change',()=>setTimeout(()=>refreshDate(),0));
   setInterval(()=>refreshDate(),60000);
 })();
