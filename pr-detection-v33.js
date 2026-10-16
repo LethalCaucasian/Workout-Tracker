@@ -26,21 +26,35 @@
     return t;
   }
   function toSeconds(mode,value){return mode==='min'?Number(value||0)*60:mode==='sec'?Number(value||0):0;}
+  function betterPair(weight,value,bestWeight,bestValue){
+    const w=Number(weight||0),v=Number(value||0),bw=Number(bestWeight||0),bv=Number(bestValue||0);
+    if(v<=0)return false;
+    return w>bw || (w===bw && v>bv);
+  }
 
   function historicalBest(planEx){
-    let sessions=0,maxWeight=0,maxReps=0,maxSeconds=0;
+    let sessions=0,bestRepsWeight=0,maxReps=0,bestHoldWeight=0,maxSeconds=0;
     (state.history||[]).forEach(h=>(h.exercises||[]).forEach(ex=>{
       if(!sameExercise(planEx,ex))return;
       sessions++;
       (ex.sets||[]).forEach(set=>{
         if(set?.done===false)return;
         const mode=modeForHistory(ex,set),weight=Number(set?.weight||0),value=Number(set?.value||0);
-        maxWeight=Math.max(maxWeight,weight);
-        if(mode==='reps')maxReps=Math.max(maxReps,value);
-        else maxSeconds=Math.max(maxSeconds,toSeconds(mode,value));
+        if(mode==='reps'){
+          if(betterPair(weight,value,bestRepsWeight,maxReps)){
+            bestRepsWeight=weight;
+            maxReps=value;
+          }
+        }else{
+          const seconds=toSeconds(mode,value);
+          if(betterPair(weight,seconds,bestHoldWeight,maxSeconds)){
+            bestHoldWeight=weight;
+            maxSeconds=seconds;
+          }
+        }
       });
     }));
-    return {sessions,maxWeight,maxReps,maxSeconds};
+    return {sessions,bestRepsWeight,maxReps,bestHoldWeight,maxSeconds};
   }
 
   function prForSet(exerciseIndex,setIndex){
@@ -49,9 +63,15 @@
     const old=historicalBest(ex);
     if(!old.sessions)return null;
     const mode=modeForPlan(ex,set),weight=Number(set.weight||0),value=Number(set.value||0),seconds=toSeconds(mode,value),records=[];
-    if(weight>0 && weight>old.maxWeight)records.push('Weight PR');
-    if(mode==='reps' && value>0 && value>old.maxReps)records.push('Rep PR');
-    if(mode!=='reps' && seconds>0 && seconds>old.maxSeconds)records.push('Hold PR');
+    if(mode==='reps'){
+      if(value<=0)return null;
+      if(weight>old.bestRepsWeight)records.push('Weight PR');
+      else if(weight===old.bestRepsWeight && value>old.maxReps)records.push('Rep PR');
+    }else{
+      if(seconds<=0)return null;
+      if(weight>old.bestHoldWeight)records.push('Weight PR');
+      else if(weight===old.bestHoldWeight && seconds>old.maxSeconds)records.push('Hold PR');
+    }
     return records.length?records:null;
   }
 
