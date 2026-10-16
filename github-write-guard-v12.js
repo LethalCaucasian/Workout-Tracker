@@ -44,25 +44,55 @@
     return Object.values(d.drafts||{}).some(meaningfulDraft);
   }
 
+  function deletionMap(...sources){
+    const out={};
+    sources.forEach(source=>{
+      if(!source||typeof source!=='object'||Array.isArray(source))return;
+      Object.entries(source).forEach(([id,ts])=>{
+        const n=Number(ts||0);
+        if(id&&n>0)out[String(id)]=Math.max(Number(out[String(id)]||0),n);
+      });
+    });
+    return out;
+  }
+
+  function localDeletions(){
+    try{return window.WorkoutProfileDeletions?.load?.()||{};}catch{return {};}
+  }
+
   function mergeManifest(remote,intended){
     if(!Array.isArray(remote?.profiles)||!Array.isArray(intended?.profiles))return intended;
+    const deletedProfiles=deletionMap(remote.deletedProfiles,intended.deletedProfiles,localDeletions());
     const merged=new Map();
-    remote.profiles.forEach(p=>{if(p?.id)merged.set(String(p.id),p);});
+    remote.profiles.forEach(p=>{
+      if(!p?.id)return;
+      const id=String(p.id),deletedAt=Number(deletedProfiles[id]||0),updatedAt=Number(p.updatedAt||0);
+      if(deletedAt&&deletedAt>=updatedAt)return;
+      merged.set(id,p);
+    });
     intended.profiles.forEach(p=>{
       if(!p?.id)return;
-      const id=String(p.id),old=merged.get(id);
-      if(!old||Number(p.updatedAt||0)>=Number(old.updatedAt||0))merged.set(id,p);
+      const id=String(p.id),deletedAt=Number(deletedProfiles[id]||0),updatedAt=Number(p.updatedAt||0);
+      if(deletedAt&&deletedAt>=updatedAt){merged.delete(id);return;}
+      const old=merged.get(id);
+      if(!old||updatedAt>=Number(old.updatedAt||0))merged.set(id,p);
     });
-    const profiles=[...merged.values()];
+    const profiles=[...merged.values()].filter(p=>{
+      const id=String(p?.id||''),deletedAt=Number(deletedProfiles[id]||0),updatedAt=Number(p?.updatedAt||0);
+      return !(deletedAt&&deletedAt>=updatedAt);
+    });
     let active=intended.activeProfileId;
-    if(!active||!profiles.some(p=>String(p.id)===String(active)))active=remote.activeProfileId||profiles[0]?.id;
+    if(!active||!profiles.some(p=>String(p.id)===String(active)))active=remote.activeProfileId;
+    if(!active||!profiles.some(p=>String(p.id)===String(active)))active=profiles[0]?.id;
+    const deletionTime=Math.max(0,...Object.values(deletedProfiles).map(x=>Number(x||0)));
     return {
       ...remote,
       ...intended,
       kind:'workout-tracker-profile-manifest',
       version:1,
-      updatedAt:Math.max(Number(remote.updatedAt||0),Number(intended.updatedAt||0)),
+      updatedAt:Math.max(Number(remote.updatedAt||0),Number(intended.updatedAt||0),deletionTime),
       activeProfileId:active,
+      deletedProfiles,
       profiles
     };
   }
@@ -95,7 +125,22 @@
     if(!body?.content)return init;
 
     const current=await fetchCurrent(url,body,init.headers);
-    if(!current?.sha){delete body.sha;return {...init,body:JSON.stringify(body)};}
+    if(!current?.sha){
+      if(isManifest(url)){
+        const intended=decodeJsonBase64(body.content);
+        if(intended){
+          const deletedProfiles=deletionMap(intended.deletedProfiles,localDeletions());
+          const profiles=(intended.profiles||[]).filter(p=>{
+            const deletedAt=Number(deletedProfiles[String(p?.id||'')]||0);
+            return !(deletedAt&&deletedAt>=Number(p?.updatedAt||0));
+          });
+          const encoded=encodeJsonBase64({...intended,deletedProfiles,profiles,updatedAt:Math.max(Number(intended.updatedAt||0),0,...Object.values(deletedProfiles).map(x=>Number(x||0)))});
+          if(encoded)body.content=encoded;
+        }
+      }
+      delete body.sha;
+      return {...init,body:JSON.stringify(body)};
+    }
 
     const intended=decodeJsonBase64(body.content);
     const remote=decodeJsonBase64(current.content);
