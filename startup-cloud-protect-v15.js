@@ -101,26 +101,9 @@
     }};
   }
   function merge(local,remote){
-    const deletions=deletionMap(remote.deletedProfiles,local.deletedProfiles,localDeletions());
-    const map=new Map();
-    (remote.profiles||[]).forEach(p=>{
-      if(p?.id&&!isDeleted(p,deletions))map.set(String(p.id),clone(p));
-    });
-    (local.profiles||[]).forEach(p=>{
-      if(!p?.id||isDeleted(p,deletions)) return;
-      const id=String(p.id),r=map.get(id),meaningful=meaningfulProfile(p);
-      if(!r){
-        if(meaningful||String(p.name||'')!=='My Profile') map.set(id,clone(p));
-        return;
-      }
-      if(meaningful&&Number(p.updatedAt||0)>Number(r.updatedAt||0)) map.set(id,clone(p));
-    });
-    const profiles=[...map.values()].filter(p=>!isDeleted(p,deletions));
-    const active=profiles.some(p=>p.id===local.activeProfileId)?local.activeProfileId:
-      (profiles.some(p=>p.id===remote.activeProfileId)?remote.activeProfileId:profiles[0]?.id);
-    const deletionTime=Math.max(0,...Object.values(deletions).map(x=>Number(x||0)));
-    const updatedAt=Math.max(Number(remote.updatedAt||0),Number(local.updatedAt||0),deletionTime,...profiles.map(p=>Number(p.updatedAt||0)),0);
-    return {kind:'workout-tracker-profiles',version:1,activeProfileId:active,updatedAt,deletedProfiles:deletions,profiles};
+    const merger=window.WorkoutCloudMerge?.mergeBundles;
+    if(typeof merger!=='function') throw new Error('Safe cloud profile merge is unavailable');
+    return merger(local,remote,localDeletions());
   }
   function setStatus(text,type=''){
     const el=document.getElementById('ghSyncStatus');
