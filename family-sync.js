@@ -45,7 +45,12 @@
     if(!profileId || !key || !api) return false;
     saveClient({profileId,key,api:api.replace(/\/$/,''),savedAt:Date.now()});
     localStorage.setItem(API_KEY,client.api);
-    history.replaceState(null,'',location.pathname+location.search);
+    // Keep the invite fragment: iOS Home Screen shortcuts can have separate
+    // storage from Safari, so they must retain a way to identify the profile.
+    // A marker lets us show a recovery screen if an install loses its fragment.
+    const inviteUrl=new URL(location.href);
+    inviteUrl.searchParams.set('shared','1');
+    history.replaceState(null,'',inviteUrl.pathname+inviteUrl.search+inviteUrl.hash);
     return true;
   }
 
@@ -194,6 +199,12 @@
     card.querySelector('#familyForget').onclick=()=>{
       if(!confirm('Disconnect this device from the shared workout profile?')) return;
       saveClient(null);
+      // This launch may contain an invite fragment. Remove it before reloading
+      // so Disconnect doesn't immediately reconnect this very same tab.
+      const cleanUrl=new URL(location.href);
+      cleanUrl.hash='';
+      cleanUrl.searchParams.delete('shared');
+      history.replaceState(null,'',cleanUrl.pathname+cleanUrl.search);
       location.reload();
     };
   }
@@ -287,7 +298,10 @@
       const key=randomKey();
       const hash=await sha256Hex(key);
       await writeAccessFile(p.id,hash);
-      const link=`${location.origin}${location.pathname}#profile=${encodeURIComponent(p.id)}&key=${encodeURIComponent(key)}&api=${encodeURIComponent(api)}`;
+      const inviteUrl=new URL(location.origin+location.pathname);
+      inviteUrl.searchParams.set('shared','1');
+      inviteUrl.hash=`profile=${encodeURIComponent(p.id)}&key=${encodeURIComponent(key)}&api=${encodeURIComponent(api)}`;
+      const link=inviteUrl.href;
       const out=document.getElementById('familyInviteLink');
       if(out) out.value=link;
       await navigator.clipboard?.writeText(link).catch(()=>{});
@@ -330,10 +344,22 @@
     window.addEventListener('workout-profile-store-change',updateAdminProfileName);
   }
 
+  function showMissingInvite(){
+    const style=document.createElement('style');
+    style.textContent='#familyReconnectRequired{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:20px;background:#091321;color:#edf4ff;font-family:inherit}#familyReconnectRequired .family-reconnect-card{max-width:480px;width:100%;padding:24px;border-radius:15px;border:1px solid #344963;background:#101e31;box-shadow:0 15px 45px rgba(0,0,0,.35)}#familyReconnectRequired h2{margin:0 0 12px;font-size:22px}#familyReconnectRequired p{margin:0 0 12px;color:#a9bbd0;line-height:1.6;font-size:15px}';
+    document.head.appendChild(style);
+    const modal=document.createElement('div');
+    modal.id='familyReconnectRequired';
+    modal.innerHTML='<div class="family-reconnect-card" role="alert"><h2>Shared profile link needed</h2><p>This shortcut opened without the profile connection. No workout data was deleted.</p><p>Open the original invite link from your messages in Safari, confirm your shared profile loads, then use Share → Add to Home Screen again. Remove the old shortcut afterward.</p></div>';
+    document.body.appendChild(modal);
+  }
+
   if(familyMode()){
     injectFamilyClientCard();
     lockFamilyUi('Shared Profile');
     setTimeout(()=>pullFamily(openedInvite),250);
+  }else if(new URLSearchParams(location.search).get('shared')==='1'){
+    showMissingInvite();
   }else{
     injectFamilyAdminCard();
   }
