@@ -151,10 +151,14 @@
       if(meaningfulProfilePayload(remote)&&!meaningfulProfilePayload(intended)){
         throw new Error('Protected synced workout data from a blank-device overwrite. Pull the cloud copy first.');
       }
-      const intendedTime=Number(intended.updatedAt||0),remoteTime=Number(remote.updatedAt||0);
-      if(remoteTime&&intendedTime&&remoteTime>intendedTime){
-        throw new Error('Remote workout data is newer on GitHub. Pull Now, then retry the sync.');
-      }
+      const merge=window.WorkoutCloudMerge?.mergeProfile;
+      if(typeof merge!=='function') throw new Error('Safe profile merging is unavailable; cloud write paused.');
+      // Always preserve saved sessions from both copies. A later edit to a draft or
+      // profile setting must never silently erase previously uploaded workouts.
+      const combined=merge(remote,intended);
+      const encoded=encodeJsonBase64(combined);
+      if(!encoded) throw new Error('Could not encode safely merged profile data.');
+      body.content=encoded;
     }
     body.sha=current.sha;
     return {...init,body:JSON.stringify(body)};
