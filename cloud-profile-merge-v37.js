@@ -48,6 +48,29 @@
       drafts,
       customPlans:{...clone(first.customPlans||{}),...clone(second.customPlans||{})}
     };
+    // Preserve routine exercises that are only present on another device.
+    // An explicitly cleared day (blank:true) still remains cleared.
+    for(const day of Object.keys(first.customPlans||{})){
+      const prior=first.customPlans[day],current=second.customPlans?.[day];
+      if(!prior||!current||current.blank===true)continue;
+      const restored=clone(current),existing=new Set((restored.exercises||[]).map(e=>String(e?.[4]||e?.[0]||'')));
+      if(!Array.isArray(restored.exercises))restored.exercises=[];
+      for(const ex of prior.exercises||[]){
+        const id=String(ex?.[4]||ex?.[0]||'');
+        if(id&&!existing.has(id)){restored.exercises.push(clone(ex));existing.add(id);}
+      }
+      // Keep configuration for named warm-up/cooldown entries too.
+      for(const field of ['warmups','cooldowns']){
+        if(!Array.isArray(prior[field]))continue;
+        if(!Array.isArray(restored[field]))restored[field]=[];
+        const seen=new Set(restored[field].map(x=>String(x?.[0]||'').toLowerCase()));
+        for(const item of prior[field]){
+          const id=String(item?.[0]||'').toLowerCase();
+          if(id&&!seen.has(id)){restored[field].push(clone(item));seen.add(id);}
+        }
+      }
+      data.customPlans[day]=restored;
+    }
     // Other profile properties (fitness/weight tracking) should not lose
     // fields solely because a device had an older incomplete object.
     for(const field of ['fitnessProfile','progressPrefs','exerciseLibrary','sectionItemIds']){
