@@ -62,5 +62,27 @@
       data
     };
   }
-  window.WorkoutCloudMerge={mergeProfile,draftRichness};
+  function mergeBundles(local,remote,extraDeletions={}){
+    if(!remote?.profiles)return clone(local);
+    const deletions={};
+    for(const src of [remote.deletedProfiles,local?.deletedProfiles,extraDeletions]){
+      for(const [id,value] of Object.entries(src||{})){
+        const ts=Number(value||0);
+        if(ts>0)deletions[id]=Math.max(Number(deletions[id]||0),ts);
+      }
+    }
+    const removed=p=>!!(p?.id&&Number(deletions[p.id]||0)>=Number(p.updatedAt||0)&&Number(deletions[p.id]||0)>0);
+    const profiles=new Map();
+    for(const p of remote.profiles||[])if(p?.id&&!removed(p))profiles.set(String(p.id),clone(p));
+    for(const p of local?.profiles||[]){
+      if(!p?.id||removed(p))continue;
+      const id=String(p.id),other=profiles.get(id);
+      profiles.set(id,other?mergeProfile(other,p):clone(p));
+    }
+    const list=[...profiles.values()].filter(p=>!removed(p));
+    const active=[local?.activeProfileId,remote.activeProfileId,list[0]?.id].find(id=>list.some(p=>p.id===id));
+    const updatedAt=Math.max(0,Number(local?.updatedAt||0),Number(remote.updatedAt||0),...list.map(p=>Number(p.updatedAt||0)),...Object.values(deletions).map(Number));
+    return {kind:'workout-tracker-profiles',version:1,activeProfileId:active,updatedAt,deletedProfiles:deletions,profiles:list};
+  }
+  window.WorkoutCloudMerge={mergeProfile,mergeBundles,draftRichness};
 })();
