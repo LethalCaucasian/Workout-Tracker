@@ -158,6 +158,22 @@
     return !!(id&&deletedAt&&deletedAt>=updatedAt);
   }
 
+  function mergeBundles(local,remote){
+    const merge=window.WorkoutCloudMerge?.mergeBundles;
+    if(typeof merge!=='function')throw new Error('Safe cloud profile merge is unavailable');
+    return merge(local,remote,localDeletions());
+  }
+
+  function sameData(a,b){
+    const stable=v=>{
+      if(v===null||typeof v!=='object')return JSON.stringify(v);
+      if(Array.isArray(v))return '['+v.map(stable).join(',')+']';
+      return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}';
+    };
+    const meaningful=x=>({deletedProfiles:x?.deletedProfiles||{},profiles:(x?.profiles||[]).map(p=>({id:p.id,updatedAt:p.updatedAt,data:p.data})).sort((a,b)=>String(a.id).localeCompare(String(b.id)))});
+    return stable(meaningful(a))===stable(meaningful(b));
+  }
+
   function localBundle(){
     if(window.WorkoutProfiles) return WorkoutProfiles.exportData();
     return {
@@ -222,9 +238,18 @@
     syncBusy=true;
     if(manual) status('Uploading profiles…');
     try{
-      const bundle=localBundle();
+      const local=localBundle();
+      const remote=await fetchRemoteBundle();
+      const bundle=remote&&!remote.legacy?mergeBundles(local,remote.bundle):local;
       const now=Date.now();
-      if(!bundle.updatedAt) bundle.updatedAt=now;
+      if(!bundle.updatedAt)bundle.updatedAt=now;
+      // Bring the local profile up to the union before cloud writes. This keeps
+      // sessions found only on GitHub visible on this device too.
+      if(remote&&!remote.legacy&&!sameData(local,bundle)){
+        suppressAutoSync=true;
+        WorkoutProfiles?.importData(bundle,{preserveActive:true,notify:false});
+        suppressAutoSync=false;
+      }
       const deletedProfiles=deletionMap(bundle.deletedProfiles,localDeletions());
       const profiles=(bundle.profiles||[]).filter(profile=>!isDeleted(profile,deletedProfiles));
 
@@ -285,7 +310,7 @@
         if(window.WorkoutProfiles) WorkoutProfiles.importLegacyState(remote.state,'Imported Profile',{notify:false});
         else {state=remote.state;save();renderToday();renderHistory();renderProgress();}
       }else if(window.WorkoutProfiles){
-        WorkoutProfiles.importData(remote.bundle,{preserveActive:true,notify:false});
+        WorkoutProfiles.importData(mergeBundles(localBundle(),remote.bundle),{preserveActive:true,notify:false});
       }else{
         state=remote.bundle.profiles[0]?.data || state;
         save();renderToday();renderHistory();renderProgress();
@@ -306,33 +331,40 @@
   }
 
   async function autoSync(){
-    if(!settings.autoSync || !settings.initialized || !validConfig() || syncBusy) return;
+    if(!settings.autoSync||!settings.initialized||!validConfig()||syncBusy)return;
     syncBusy=true;
     try{
       const remote=await fetchRemoteBundle();
       const local=localBundle();
-      const localDeletionTime=Math.max(0,...Object.values(localDeletions()).map(x=>Number(x||0)));
-      const localTime=Math.max(Number(local.updatedAt || 0),localDeletionTime);
-      const remoteTime=Number(remote?.updatedAt || 0);
-
-      if(remote && remoteTime>localTime){
-        suppressAutoSync=true;
-        if(remote.legacy){
-          WorkoutProfiles?.importLegacyState(remote.state,'Imported Profile',{notify:false});
-        }else{
-          WorkoutProfiles?.importData(remote.bundle,{preserveActive:true,notify:false});
-        }
-        suppressAutoSync=false;
-        settings.lastSync=Date.now();
-        persistSettings();
-        status(`Auto-pulled newer profile data • ${new Date(settings.lastSync).toLocaleTimeString()}`,'ok');
-      }else if(!remote || localTime>remoteTime){
+      if(!remote){
         syncBusy=false;
         await pushBundle(false);
         return;
       }
+      if(remote.legacy){
+        // A legacy single-profile file cannot be safely compared to a
+        // multi-profile bundle; do not replace modern profiles automatically.
+        status('Old-format cloud data found. Automatic replacement paused.','warn');
+        return;
+      }
+      const combined=mergeBundles(local,remote.bundle);
+      const needsPull=!sameData(local,combined);
+      const needsPush=!sameData(remote.bundle,combined);
+      if(needsPull){
+        suppressAutoSync=true;
+        WorkoutProfiles.importData(combined,{preserveActive:true,notify:false});
+        suppressAutoSync=false;
+      }
+      if(needsPush){
+        syncBusy=false;
+        await pushBundle(false);
+        return;
+      }
+      settings.lastSync=Date.now();
+      persistSettings();
+      if(needsPull)status('Auto-merged local and cloud workout data','ok');
     }catch(err){
-      status(`Auto-sync paused: ${err.message}`,'err');
+      status('Auto-sync paused: '+err.message,'err');
     }finally{
       suppressAutoSync=false;
       syncBusy=false;
