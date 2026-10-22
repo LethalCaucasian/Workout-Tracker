@@ -221,6 +221,7 @@
       if(row.group){next.group=row.group;next.rounds=row.rounds;}else{delete next.group;delete next.rounds;}
       ex[5]=next;
     });
+    c.sectionsUpdatedAt=Date.now();
     save();
     if(Number(state.selectedDay)===Number(day)&&typeof renderToday==='function') renderToday();
     if(typeof renderProgress==='function') renderProgress();
