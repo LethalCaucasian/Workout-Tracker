@@ -225,6 +225,7 @@
     c.warmups = setupWarmups.map(x=>[String(x[0]||'').trim(),String(x[1]||'').trim(),normalizeEntryType(x[2])]).filter(x=>x[0]);
     c.cooldowns = setupCooldowns.map(x=>[String(x[0]||'').trim(),String(x[1]||'').trim(),normalizeEntryType(x[2])]).filter(x=>x[0]);
     c.warm = '';
+    c.sectionsUpdatedAt=Date.now();
     delete state.drafts?.['d'+setupDay]?.warmupEntries;
     delete state.drafts?.['d'+setupDay]?.cooldownEntries;
     save(); closeSetup(); renderToday(); if(typeof renderHistory==='function') renderHistory();
