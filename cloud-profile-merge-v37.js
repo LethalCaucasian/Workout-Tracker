@@ -48,28 +48,57 @@
       drafts,
       customPlans:{...clone(first.customPlans||{}),...clone(second.customPlans||{})}
     };
-    // Preserve routine exercises that are only present on another device.
-    // An explicitly cleared day (blank:true) still remains cleared.
-    for(const day of Object.keys(first.customPlans||{})){
-      const prior=first.customPlans[day],current=second.customPlans?.[day];
-      if(!prior||!current||current.blank===true)continue;
-      const restored=clone(current),existing=new Set((restored.exercises||[]).map(e=>String(e?.[4]||e?.[0]||'')));
-      if(!Array.isArray(restored.exercises))restored.exercises=[];
-      for(const ex of prior.exercises||[]){
-        const id=String(ex?.[4]||ex?.[0]||'');
-        if(id&&!existing.has(id)){restored.exercises.push(clone(ex));existing.add(id);}
-      }
-      // Keep configuration for named warm-up/cooldown entries too.
-      for(const field of ['warmups','cooldowns']){
-        if(!Array.isArray(prior[field]))continue;
-        if(!Array.isArray(restored[field]))restored[field]=[];
-        const seen=new Set(restored[field].map(x=>String(x?.[0]||'').toLowerCase()));
-        for(const item of prior[field]){
-          const id=String(item?.[0]||'').toLowerCase();
-          if(id&&!seen.has(id)){restored[field].push(clone(item));seen.add(id);}
+    // Workout history is additive; routine *edits* are not. An explicit
+    // deletion or rename must not be undone by an older device re-adding
+    // the previous exercise from its local plan.
+    for(const day of new Set([...Object.keys(first.customPlans||{}),...Object.keys(second.customPlans||{})])){
+      const prior=first.customPlans?.[day],current=second.customPlans?.[day];
+      if(!prior||!current)continue;
+      const merged=clone(current);
+      const priorExerciseTime=number(prior.exercisesUpdatedAt);
+      const currentExerciseTime=number(current.exercisesUpdatedAt);
+      if(priorExerciseTime||currentExerciseTime){
+        // A versioned routine is authoritative over any unversioned copy.
+        // If both are versioned, the latest explicit edit wins.
+        const latest=priorExerciseTime>currentExerciseTime?prior:current;
+        merged.exercises=clone(latest.exercises||[]);
+        merged.name=latest.name||'';
+        merged.blank=!!latest.blank;
+        merged.exercisesUpdatedAt=Math.max(priorExerciseTime,currentExerciseTime);
+      }else if(current.blank!==true){
+        // Legacy plans predate per-day edit markers. Keep their missing
+        // exercise entries once, until a deliberate editor save versions it.
+        const existing=new Set((merged.exercises||[]).map(e=>String(e?.[4]||e?.[0]||'')));
+        if(!Array.isArray(merged.exercises))merged.exercises=[];
+        for(const ex of prior.exercises||[]){
+          const id=String(ex?.[4]||ex?.[0]||'');
+          if(id&&!existing.has(id)){merged.exercises.push(clone(ex));existing.add(id);}
         }
       }
-      data.customPlans[day]=restored;
+
+      const priorSectionTime=number(prior.sectionsUpdatedAt);
+      const currentSectionTime=number(current.sectionsUpdatedAt);
+      if(priorSectionTime||currentSectionTime){
+        const latest=priorSectionTime>currentSectionTime?prior:current;
+        for(const key of ['warm','warmups','cooldowns','warmupEnabled','cooldownEnabled','rest']){
+          if(Object.prototype.hasOwnProperty.call(latest,key))merged[key]=clone(latest[key]);
+          else delete merged[key];
+        }
+        merged.sectionsUpdatedAt=Math.max(priorSectionTime,currentSectionTime);
+      }else if(current.blank!==true){
+        // Preserve unmatched legacy warm-up / cooldown items until a setup
+        // edit explicitly stamps the section configuration.
+        for(const field of ['warmups','cooldowns']){
+          if(!Array.isArray(prior[field]))continue;
+          if(!Array.isArray(merged[field]))merged[field]=[];
+          const seen=new Set(merged[field].map(x=>String(x?.[0]||'').toLowerCase()));
+          for(const item of prior[field]){
+            const id=String(item?.[0]||'').toLowerCase();
+            if(id&&!seen.has(id)){merged[field].push(clone(item));seen.add(id);}
+          }
+        }
+      }
+      data.customPlans[day]=merged;
     }
     // Other profile properties (fitness/weight tracking) should not lose
     // fields solely because a device had an older incomplete object.
