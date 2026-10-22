@@ -309,9 +309,9 @@
   function saveEditor(){
     working=working.map((ex,i)=>{const x=hydrateExercise(ex,editingDay,i);x[0]=String(x[0]||'').trim();x[1]=String(x[1]||'').trim()||(x[3]==='sec'?'3×30 sec':x[3]==='min'?'3×1 min':x[3]==='mixed'?'3 sets':'3×8–12');x[2]=String(x[2]||'').trim();x[3]=normalizeStyle(x[3]);if(!x[4])x[4]=newExerciseId();return x;});
     if(working.some(ex=>!ex[0])){alert('Every exercise needs a name.');return;}
-    working.forEach(registerExercise);remapDraftSets(editingDay,originalExercises,working);state.customPlans[editingDay]={name:String(workingName||'').trim(),warm:(customForDay(editingDay)?.warm??(state.routineBlank?'':(defaultPlanForDay(editingDay)?.warm||''))),warmups:Array.isArray(customForDay(editingDay)?.warmups)?clone(customForDay(editingDay).warmups):(state.routineBlank?[]:clone(WARMUPS[editingDay]||[])),exercises:clone(working),blank:false};save();closeEditor();renderToday();renderProgress();toast('Routine updated');
+    working.forEach(registerExercise);remapDraftSets(editingDay,originalExercises,working);state.customPlans[editingDay]={name:String(workingName||'').trim(),warm:(customForDay(editingDay)?.warm??(state.routineBlank?'':(defaultPlanForDay(editingDay)?.warm||''))),warmups:Array.isArray(customForDay(editingDay)?.warmups)?clone(customForDay(editingDay).warmups):(state.routineBlank?[]:clone(WARMUPS[editingDay]||[])),exercises:clone(working),blank:false,exercisesUpdatedAt:Date.now(),sectionsUpdatedAt:Number(customForDay(editingDay)?.sectionsUpdatedAt||0)};save();closeEditor();renderToday();renderProgress();toast('Routine updated');
   }
-  function clearDay(){if(!confirm(`Clear Day ${editingDay}? Saved workout history will stay unchanged.`))return;delete state.drafts?.['d'+editingDay];state.customPlans[editingDay]={name:'',warm:'',warmups:[],exercises:[],blank:true};save();closeEditor();renderToday();toast('Day cleared');}
+  function clearDay(){if(!confirm(`Clear Day ${editingDay}? Saved workout history will stay unchanged.`))return;delete state.drafts?.['d'+editingDay];state.customPlans[editingDay]={name:'',warm:'',warmups:[],cooldowns:[],exercises:[],blank:true,exercisesUpdatedAt:Date.now(),sectionsUpdatedAt:Date.now()};save();closeEditor();renderToday();toast('Day cleared');}
 
   renderToday();renderHistory();renderProgress();
 })();
