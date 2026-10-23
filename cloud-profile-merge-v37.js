@@ -18,6 +18,16 @@
   function chooseDraft(a,b,preferB){
     if(!a)return clone(b);
     if(!b)return clone(a);
+    // Intentional clears and later edits have a per-draft timestamp. A
+    // previous, fuller draft must never undo a newer explicit reset.
+    const at=number(a._draftUpdatedAt||a._resetAt);
+    const bt=number(b._draftUpdatedAt||b._resetAt);
+    if(at||bt){
+      if(at!==bt)return clone(at>bt?a:b);
+      return clone(preferB?b:a);
+    }
+    // Legacy unstamped drafts: retain the more complete draft until edited
+    // or reset through the timestamp-aware controls.
     const as=draftRichness(a),bs=draftRichness(b);
     if(!as&&bs)return clone(b);
     if(!bs&&as)return clone(a);
