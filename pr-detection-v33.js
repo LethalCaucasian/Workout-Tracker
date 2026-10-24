@@ -59,7 +59,7 @@
 
   function prForSet(exerciseIndex,setIndex){
     const plan=selectedPlan(),ex=plan?.exercises?.[exerciseIndex],set=getDraft()?.sets?.[exerciseIndex]?.[setIndex];
-    if(!ex||!set||!set.done)return null;
+    if(!ex||ex[3]==='goal'||!set||!set.done)return null;
     const old=historicalBest(ex);
     if(!old.sessions)return null;
     const mode=modeForPlan(ex,set),weight=Number(set.weight||0),value=Number(set.value||0),seconds=toSeconds(mode,value),records=[];
