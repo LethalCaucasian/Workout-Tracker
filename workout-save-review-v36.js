@@ -9,14 +9,21 @@
   const count=(n,s,plural=s+'s')=>n+' '+(n===1?s:plural);
   const matches=(a,b)=>!!(a?.[4]&&b?.exerciseId&&String(a[4])===String(b.exerciseId))||txt(a?.[0]).toLowerCase()===txt(b?.name).toLowerCase();
   function expectsWeight(ex,sets){
+    if(ex?.[3]==='goal'||ex?.[5]?.trackWeight===false)return false;
+    if(ex?.[5]?.trackWeight===true)return true;
     if(sets.some(s=>positive(s?.weight)))return true;
     return (state.history||[]).some(h=>(h.exercises||[]).some(e=>matches(ex,e)&&(e.sets||[]).some(s=>positive(s?.weight))));
   }
   function analyze(){
     const p=selectedPlan(),d=getDraft(),details=[];
-    let skipped=0,unchecked=0,missingValue=0,missingWeight=0,optional=0;
+    let skipped=0,unchecked=0,missingValue=0,missingWeight=0,optional=0,shortGoals=0;
     if(!p.rest)(p.exercises||[]).forEach((ex,i)=>{
       const name=txt(ex?.[0])||'Exercise '+(i+1),sets=Array.isArray(d.sets?.[i])?d.sets[i]:[];
+      if(ex?.[3]==='goal'){
+        const current=Number(sets[0]?.value||0),target=Math.max(1,Number(ex?.[5]?.goalTarget||10000)),unit=String(ex?.[5]?.goalUnit||'steps');
+        if(current<target){shortGoals++;details.push(name+': '+current.toLocaleString()+' / '+target.toLocaleString()+' '+unit);}
+        return;
+      }
       if(!sets.length){skipped++;details.push(name+': no sets');return;}
       const done=sets.filter(s=>s?.done).length;
       if(!done)skipped++;
@@ -46,6 +53,7 @@
     }
     const summary=[];
     if(skipped)summary.push(count(skipped,'exercise')+' with no completed sets');
+    if(shortGoals)summary.push(count(shortGoals,'daily goal')+' not reached');
     if(unchecked)summary.push(count(unchecked,'unchecked set'));
     if(missingValue)summary.push(count(missingValue,'checked set')+' missing reps/time');
     if(missingWeight)summary.push(count(missingWeight,'checked set')+' missing weight');
