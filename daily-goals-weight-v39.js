@@ -178,6 +178,49 @@
     save();renderToday();
   };
 
+  // A daily count is not a rep PR. Show target adherence separately from
+  // the strength progression cards, within the selected date range.
+  const baseRenderProgress=renderProgress;
+  renderProgress=function(...args){
+    const result=baseRenderProgress.apply(this,args);
+    const grid=document.getElementById('progressGrid');if(!grid)return result;
+    const by=new Map();
+    (state.history||[]).forEach(h=>{
+      if(window.WorkoutProgressTools&&!WorkoutProgressTools.inRange(h.date))return;
+      (h.exercises||[]).forEach(ex=>{
+        if(ex.type!=='goal')return;
+        const id=String(ex.exerciseId||ex.name||'goal');
+        if(!by.has(id))by.set(id,{name:ex.name||'Daily goal',unit:ex.goalUnit||'steps',target:ex.goalTarget||10000,best:0,met:0,days:0,latest:''});
+        const record=by.get(id),s=ex.sets?.[0]||{},n=number(s.value);
+        const tg=Math.max(1,number(ex.goalTarget||s.goalTarget||record.target));
+        record.days++;record.best=Math.max(record.best,n);
+        if(n>=tg)record.met++;
+        if(String(h.date)>=record.latest){record.latest=String(h.date);record.last=n;record.target=tg;record.unit=ex.goalUnit||s.goalUnit||record.unit;}
+      });
+    });
+    if(!by.size)return result;
+    const empty=[...grid.children].find(child=>child.classList.contains('card')&&child.classList.contains('muted'));
+    if(empty)empty.remove();
+    for(const record of [...by.values()].sort((a,b)=>a.name.localeCompare(b.name))){
+      const card=document.createElement('div');card.className='pr daily-goal-history';
+      const title=document.createElement('h4');title.textContent=record.name+' · Daily goal';
+      const lead=document.createElement('div');lead.className='big';lead.textContent=fmt(record.best)+' '+record.unit;
+      const metrics=document.createElement('div');metrics.className='progress-metrics';
+      for(const [label,value] of [
+        ['Target',fmt(record.target)+' '+record.unit],
+        ['Days achieved',record.met+' / '+record.days],
+        ['Latest logged',fmt(record.last)+' '+record.unit],
+        ['Best day',fmt(record.best)+' '+record.unit]
+      ]){
+        const cell=document.createElement('div');cell.className='progress-metric';
+        const big=document.createElement('b');big.textContent=value;
+        const small=document.createElement('span');small.textContent=label;
+        cell.append(big,small);metrics.append(cell);
+      }
+      card.append(title,lead,metrics);grid.append(card);
+    }
+    return result;
+  };
   const previousRender=renderToday;
   renderToday=function(...args){
     const result=previousRender.apply(this,args);
@@ -190,7 +233,10 @@
     const p=selectedPlan(),plan=p.exercises||[],draft=state.drafts?.['d'+state.selectedDay];
     modal.querySelectorAll('.editor-item').forEach((row,i)=>{
       if(row.querySelector('.editor-goal-settings'))return;
-      const ex=plan[i],modeInput=row.querySelector('[data-field="type"]'),mode=modeInput?.value;
+      const id=row.querySelector('.progression-select')?.value;
+      const name=row.querySelector('[data-field="name"]')?.value;
+      const ex=plan.find(x=>id&&exerciseId(x)===id)||plan.find(x=>x?.[0]===name)||null;
+      const modeInput=row.querySelector('[data-field="type"]'),mode=modeInput?.value;
       const meta=config(ex);
       const panel=document.createElement('div');panel.className='editor-goal-settings';
       const weight=document.createElement('label');weight.className='editor-weight-check';
