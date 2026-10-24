@@ -195,7 +195,11 @@
     const modal=document.querySelector('.editor-backdrop.open .editor-modal');if(!modal)return[];
     return [...modal.querySelectorAll('.editor-item')].map((row,index)=>{
       const key=metaKey(row,index),current=exerciseMetaDraft.get(key)||sourceMeta(key,index),get=f=>row.querySelector(`[data-ex-default="${f}"]`)?.value;
-      return {sets:Math.max(1,Math.min(30,parseInt(get('sets'),10)||current.sets||3)),restSec:Math.max(0,Math.min(600,parseInt(get('restSec'),10)||0)),group:String(get('group')??current.group??'').trim(),rounds:Math.max(1,Math.min(30,parseInt(get('rounds'),10)||current.rounds||1))};
+      const mode=row.querySelector('[data-field="type"]')?.value;
+      const trackWeightInput=row.querySelector('[data-goal-weight]');
+      const targetInput=row.querySelector('[data-goal-target]');
+      const unitInput=row.querySelector('[data-goal-unit]');
+      return {sets:mode==='goal'?1:Math.max(1,Math.min(30,parseInt(get('sets'),10)||current.sets||3)),restSec:Math.max(0,Math.min(600,parseInt(get('restSec'),10)||0)),group:String(get('group')??current.group??'').trim(),rounds:Math.max(1,Math.min(30,parseInt(get('rounds'),10)||current.rounds||1)),trackWeight:mode==='goal'?false:(trackWeightInput?!!trackWeightInput.checked:undefined),goalTarget:targetInput?Math.max(1,Math.floor(Number(targetInput.value)||10000)):undefined,goalUnit:unitInput?String(unitInput.value||'steps').trim().slice(0,22)||'steps':undefined};
     });
   }
 
@@ -219,6 +223,15 @@
       const next={...(ex?.[5]&&typeof ex[5]==='object'?ex[5]:{}),sets:row.sets};
       if(row.restSec) next.restSec=row.restSec; else delete next.restSec;
       if(row.group){next.group=row.group;next.rounds=row.rounds;}else{delete next.group;delete next.rounds;}
+      if(typeof row.trackWeight==='boolean') next.trackWeight=row.trackWeight;
+      if(ex[3]==='goal'){
+        next.trackWeight=false;
+        next.goalTarget=row.goalTarget||10000;
+        next.goalUnit=row.goalUnit||'steps';
+        next.sets=1;
+      }else{
+        delete next.goalTarget;delete next.goalUnit;
+      }
       ex[5]=next;
     });
     c.sectionsUpdatedAt=Date.now();
