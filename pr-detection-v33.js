@@ -35,7 +35,7 @@
   function historicalBest(planEx){
     let sessions=0,bestRepsWeight=0,maxReps=0,bestHoldWeight=0,maxSeconds=0;
     (state.history||[]).forEach(h=>(h.exercises||[]).forEach(ex=>{
-      if(!sameExercise(planEx,ex))return;
+      if(ex.type==='goal'||!sameExercise(planEx,ex))return;
       sessions++;
       (ex.sets||[]).forEach(set=>{
         if(set?.done===false)return;
