@@ -267,7 +267,8 @@
 
   function historyExerciseFrom(ex,sets){
     const setMode = window.WorkoutV2?.setModeFor || ((exercise,set)=>exercise?.[3] || set?.mode || 'reps');
-    return {exerciseId:ex[4],name:ex[0],target:ex[1],type:ex[3],sets:(sets||[]).map(s=>({weight:parseFloat(s.weight)||0,value:parseFloat(s.value)||0,done:!!s.done,mode:setMode(ex,s)}))};
+    const goal=ex[3]==='goal',goalTarget=goal?Math.max(1,Number(ex?.[5]?.goalTarget||10000)):undefined,goalUnit=goal?String(ex?.[5]?.goalUnit||'steps'):undefined;
+    return {exerciseId:ex[4],name:ex[0],target:ex[1],type:ex[3],...(goal?{goalTarget,goalUnit}:{}),sets:(sets||[]).map(s=>({weight:goal||ex?.[5]?.trackWeight===false?0:(parseFloat(s.weight)||0),value:parseFloat(s.value)||0,done:!!s.done,mode:setMode(ex,s),...(goal?{goalTarget,goalUnit}: {})}))};
   }
 
   function sectionHistory(items,entries){
