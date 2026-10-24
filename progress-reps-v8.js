@@ -99,6 +99,7 @@
     ensureControls();
     const by={};
     filteredHistory().forEach(h=>(h.exercises||[]).forEach(e=>{
+      if(e.type==='goal')return;
       const key=e.exerciseId||`legacy-${slug(e.name)}`;
       if(!by[key]) by[key]={name:e.name,bestRepsWeight:0,bestReps:0,bestHoldWeight:0,bestSeconds:0,totalReps:0,sessions:0,hasReps:false,hasHold:false};
       const o=by[key];o.name=e.name||o.name;o.sessions++;
