@@ -228,6 +228,19 @@
     };
   }
 
+  function activeEntryHasFocus(){
+    const el=document.activeElement;
+    if(!el||!el.matches?.('input, textarea, select, [contenteditable="true"]'))return false;
+    return !!el.closest?.('#todayContent, .editor-modal, .day-setup-modal, #fitnessProfileContent');
+  }
+  // Never import profiles while an entry field owns the mobile keyboard.
+  // The importer re-creates Today's DOM, dismissing the keyboard mid-typing.
+  document.addEventListener('focusout',event=>{
+    if(!event.target?.closest?.('#todayContent, .editor-modal, .day-setup-modal, #fitnessProfileContent'))return;
+    if(!settings.autoSync||!settings.initialized)return;
+    setTimeout(()=>{if(!activeEntryHasFocus())scheduleAutoSync();},200);
+  });
+
   async function pushBundle(manual=false){
     if(syncBusy) return;
     if(!validConfig()){
@@ -238,8 +251,16 @@
     syncBusy=true;
     if(manual) status('Uploading profiles…');
     try{
-      const local=localBundle();
+      if(activeEntryHasFocus()){
+        if(manual)status('Finish entering the workout before syncing.','warn');
+        return;
+      }
       const remote=await fetchRemoteBundle();
+      if(activeEntryHasFocus()){
+        if(manual)status('Sync deferred until you finish entering the workout.','warn');
+        return;
+      }
+      const local=localBundle();
       const bundle=remote&&!remote.legacy?mergeBundles(local,remote.bundle):local;
       const now=Date.now();
       if(!bundle.updatedAt)bundle.updatedAt=now;
@@ -305,6 +326,10 @@
         return;
       }
 
+      if(activeEntryHasFocus()){
+        status('Pull deferred until you finish entering the workout.','warn');
+        return;
+      }
       suppressAutoSync=true;
       if(remote.legacy){
         if(window.WorkoutProfiles) WorkoutProfiles.importLegacyState(remote.state,'Imported Profile',{notify:false});
@@ -331,10 +356,12 @@
   }
 
   async function autoSync(){
-    if(!settings.autoSync||!settings.initialized||!validConfig()||syncBusy)return;
+    if(!settings.autoSync||!settings.initialized||!validConfig()||syncBusy||activeEntryHasFocus())return;
     syncBusy=true;
     try{
       const remote=await fetchRemoteBundle();
+      // Focus may have moved into an input while the network read was running.
+      if(activeEntryHasFocus())return;
       const local=localBundle();
       if(!remote){
         syncBusy=false;
