@@ -44,9 +44,19 @@
     const newerB=number(b.updatedAt)>=number(a.updatedAt);
     const older=newerB?a:b,newer=newerB?b:a;
     const first=profileData(older),second=profileData(newer);
+    // A workout deletion is intentional, unlike a missing session on a stale
+    // device. Persist tombstones by history ID so old cloud copies cannot
+    // resurrect entries that the user removed.
+    const deletedWorkoutIds={};
+    for(const source of [first.deletedWorkoutIds,second.deletedWorkoutIds]){
+      for(const [id,stamp] of Object.entries(source||{})){
+        const ts=number(stamp);
+        if(ts>0)deletedWorkoutIds[String(id)]=Math.max(number(deletedWorkoutIds[id]),ts);
+      }
+    }
     const byHistory=new Map();
-    for(const h of first.history||[])if(h)byHistory.set(historyKey(h),clone(h));
-    for(const h of second.history||[])if(h)byHistory.set(historyKey(h),clone(h));
+    for(const h of first.history||[])if(h&&!deletedWorkoutIds[historyKey(h)])byHistory.set(historyKey(h),clone(h));
+    for(const h of second.history||[])if(h&&!deletedWorkoutIds[historyKey(h)])byHistory.set(historyKey(h),clone(h));
     const history=[...byHistory.values()].sort((x,y)=>date(x).localeCompare(date(y))||number(x.id)-number(y.id));
     const drafts={};
     for(const key of new Set([...Object.keys(first.drafts||{}),...Object.keys(second.drafts||{})]))
@@ -55,6 +65,7 @@
       ...clone(first),
       ...clone(second),
       history,
+      deletedWorkoutIds,
       drafts,
       customPlans:{...clone(first.customPlans||{}),...clone(second.customPlans||{})}
     };
