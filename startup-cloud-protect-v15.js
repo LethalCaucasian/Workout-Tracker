@@ -110,6 +110,31 @@
     if(el){el.textContent=text;el.className=`gh-sync-status ${type}`;}
   }
 
+  function entryHasFocus(){
+    const element=document.activeElement;
+    return !!(element?.matches?.('input, textarea, select, [contenteditable="true"]') &&
+      element?.closest?.('#todayContent, .editor-modal, .day-setup-modal, #fitnessProfileContent'));
+  }
+  async function waitForEntryFocusToEnd(){
+    // Initial cloud download runs asynchronously, so it can finish after the
+    // user has started typing. Do not replace the active workout mid-entry.
+    while(entryHasFocus()){
+      setStatus('Cloud data ready; waiting for workout entry to finish…');
+      await new Promise(resolve=>{
+        const check=()=>{
+          if(entryHasFocus())return;
+          document.removeEventListener('focusout',check,true);
+          document.removeEventListener('visibilitychange',check);
+          // Allow focus to move between two fields without forcing a redraw.
+          setTimeout(resolve,450);
+        };
+        document.addEventListener('focusout',check,true);
+        document.addEventListener('visibilitychange',check);
+        check();
+      });
+    }
+  }
+
   window.WorkoutStartupCloudReady=(async()=>{
     if(familyMode()){
       stateInfo.checked=true;stateInfo.skipped=true;
@@ -128,6 +153,7 @@
         return true;
       }
       if(!window.WorkoutProfiles){throw new Error('Profile manager is not ready');}
+      await waitForEntryFocusToEnd();
       if(remote.legacy){
         WorkoutProfiles.importLegacyState(remote.state,'Imported Profile',{notify:false});
       }else{
