@@ -2,6 +2,11 @@
   // Non-destructive reconciliation used by startup, auto-sync and GitHub writes.
   // Explicit profile deletions are managed separately by deletion tombstones.
   const clone=x=>JSON.parse(JSON.stringify(x));
+  function persistableProfile(value){
+    const p=clone(value);
+    if(p?.data&&typeof p.data==='object')delete p.data._editingHistoryId;
+    return p;
+  }
   const date=x=>String(x?.date||'');
   const profileData=p=>p?.data||p?.state||{};
   const number=x=>Number(x||0);
@@ -39,8 +44,8 @@
     return h?.id!=null?String(h.id):'legacy-'+String(h?.date||'')+'-'+String(h?.day||'')+'-'+String(h?.name||'');
   }
   function mergeProfile(a,b){
-    if(!a)return clone(b);
-    if(!b)return clone(a);
+    if(!a)return persistableProfile(b);
+    if(!b)return persistableProfile(a);
     const newerB=number(b.updatedAt)>=number(a.updatedAt);
     const older=newerB?a:b,newer=newerB?b:a;
     const first=profileData(older),second=profileData(newer);
@@ -128,12 +133,12 @@
         &&typeof first[field]==='object'&&typeof second[field]==='object')
         data[field]={...clone(first[field]),...clone(second[field])};
     }
-    return {
+    return persistableProfile({
       ...clone(older),...clone(newer),
       id:String(newer.id||older.id),
       updatedAt:Math.max(number(a.updatedAt),number(b.updatedAt)),
       data
-    };
+    });
   }
   function mergeBundles(local,remote,extraDeletions={}){
     if(!remote?.profiles)return clone(local);
@@ -146,11 +151,11 @@
     }
     const removed=p=>!!(p?.id&&Number(deletions[p.id]||0)>=Number(p.updatedAt||0)&&Number(deletions[p.id]||0)>0);
     const profiles=new Map();
-    for(const p of remote.profiles||[])if(p?.id&&!removed(p))profiles.set(String(p.id),clone(p));
+    for(const p of remote.profiles||[])if(p?.id&&!removed(p))profiles.set(String(p.id),persistableProfile(p));
     for(const p of local?.profiles||[]){
       if(!p?.id||removed(p))continue;
       const id=String(p.id),other=profiles.get(id);
-      profiles.set(id,other?mergeProfile(other,p):clone(p));
+      profiles.set(id,other?mergeProfile(other,p):persistableProfile(p));
     }
     const list=[...profiles.values()].filter(p=>!removed(p));
     const active=[local?.activeProfileId,remote.activeProfileId,list[0]?.id].find(id=>list.some(p=>p.id===id));
