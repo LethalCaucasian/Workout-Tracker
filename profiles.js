@@ -60,6 +60,9 @@
         // transient edit flag from older browser storage can reappear here.
         const normalizedActive=parsed.profiles.find(p=>p.id===parsed.activeProfileId)||parsed.profiles[0];
         state = clone(normalizedActive.data);
+        // Persist the sanitized bundle immediately, not only on the next edit.
+        // Otherwise stale edit flags can linger in browser storage indefinitely.
+        localStorage.setItem(PROFILE_KEY,JSON.stringify(parsed));
         appSave();
         return parsed;
       }
