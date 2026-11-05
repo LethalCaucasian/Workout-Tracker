@@ -56,7 +56,10 @@
           updatedAt:Number(p.updatedAt || Date.now()),
           data:cleanState(p.data)
         }));
-        state = clone(active.data);
+        // Load the normalized copy, not the pre-cleanup object. Otherwise a
+        // transient edit flag from older browser storage can reappear here.
+        const normalizedActive=parsed.profiles.find(p=>p.id===parsed.activeProfileId)||parsed.profiles[0];
+        state = clone(normalizedActive.data);
         appSave();
         return parsed;
       }
