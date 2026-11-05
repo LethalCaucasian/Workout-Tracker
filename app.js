@@ -109,6 +109,8 @@ const WARMUPS = {
 
 const STORAGE_KEY="chatgpt_workout_tracker_v1";
 let state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"selectedDay":1,"drafts":{},"history":[]}');
+// Never revive an unfinished UI edit session on browser reload.
+delete state._editingHistoryId;
 let timerLeft=60, timerId=null;
 
 function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
