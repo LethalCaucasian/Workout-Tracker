@@ -113,7 +113,13 @@ let state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"selectedDay":1,"d
 if(state&&typeof state==='object')delete state._editingHistoryId;
 let timerLeft=60, timerId=null;
 
-function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}
+function save(){
+  // Editing a saved workout is a temporary UI session, not saved workout data.
+  // Keep the flag in memory for Save/Cancel, but never restore it after refresh.
+  const persisted={...state};
+  delete persisted._editingHistoryId;
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(persisted));
+}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1700)}
 function fmtDate(d=new Date()){return d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})}
 function selectedPlan(){return PLAN.find(p=>p.day===state.selectedDay)}
