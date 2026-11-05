@@ -269,10 +269,17 @@
   function importBundle(bundle,{preserveActive=false,notify=true}={}){
     captureActive();
     const oldActive=profileStore.activeProfileId;
+    // A background sync may update another family member or the cloud
+    // manifest without changing the active workout. Re-rendering Today in
+    // that case destroys the input element and closes iPhone keyboards.
+    const activeBefore=cleanState(state);
     profileStore=normalizeImportedBundle(bundle);
     if(preserveActive && profileStore.profiles.some(p=>p.id===oldActive)) profileStore.activeProfileId=oldActive;
+    const activeAfter=activeProfile();
+    const activeSame=oldActive===activeAfter?.id &&
+      JSON.stringify(activeBefore)===JSON.stringify(activeAfter?.data);
     persistStore();
-    loadActiveIntoApp();
+    if(!activeSame)loadActiveIntoApp();
     if(notify) notifyChange('import-profiles');
   }
 
