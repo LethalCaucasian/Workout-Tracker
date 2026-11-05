@@ -18,6 +18,9 @@
     // Old single-profile GitHub sync used this field. Profile timestamps now
     // live in the profile store instead, so it does not belong in each plan.
     delete next._syncUpdatedAt;
+    // Edit mode is a temporary UI session, not profile data. Keeping this in
+    // backups or cloud sync reopens a saved workout on every page refresh.
+    delete next._editingHistoryId;
     if(!next.selectedDay) next.selectedDay = 1;
     if(!next.drafts || typeof next.drafts !== 'object') next.drafts = {};
     if(!Array.isArray(next.history)) next.history = [];
